@@ -22,7 +22,7 @@ class DbService():
             dbname = mysqlSection['db.dbname']
             charset = mysqlSection['db.charset']
             self.conn = pymysql.connect(host=host, port=port, user=username, passwd=password, db=dbname, charset=charset)
-            self.conn.autocommit(True)
+            #self.conn.autocommit(True)
             self.cursor = self.conn.cursor()
         else:
             raise FileNotFoundError('config.ini mysql section not found!!!')
@@ -36,39 +36,22 @@ class DbService():
             self.conn.close()
             print('---> 关闭连接')
 
-    #通用插入方法
-    def insert_item(self, item, upsert_sql):
-        """插入操作-通用方法，插入单个item通用方法，item字段名须与upsert_sql字段名一致，且数据库中有唯一(组合)索引字段"""
-        if (item & upsert_sql):
-            item_json = json.dumps(item)
-            print("format sql before:", upsert_sql)
-            print('item_json:', item_json)
-            upsert_sql.format(item_json)
-            print("format sql after:", upsert_sql)
+    def insert(self, upsert_sql):
+        if upsert_sql:
+            print(upsert_sql)
             self.cursor.execute(upsert_sql)
-
-    # 没有加异常处理，请自行添加
-    # on duplicate key update 这个写法是以表中的唯一索引unique字段为主，去更新其他的字段，兼顾insert和update功能，即没有唯一索引对应的数据，就insert，有就update
-    def insertItem(self, item):
-        if item:
-            sql = "insert into spider_stock_base_info " \
-                  "(comp_code, comp_url, comp_name, security_code, exchange, " \
-                  "security_name, the_date, whole_capital, circulating_capital, " \
-                  "announcement_url) " \
-                  "values ('{0}', '{1}', '{2}', '{3}', '{4}', " \
-                  "'{5}', '{6}', {7}, {8}, " \
-                  "'{9}') " \
-                  "on duplicate key update " \
-                  "comp_code=values(comp_code), comp_url=values(comp_url), comp_name=values(comp_name), " \
-                  "security_name=values(security_name), the_date=values(the_date), whole_capital=values(whole_capital), circulating_capital=values(circulating_capital), " \
-                  "announcement_url=values(announcement_url) "
-            sql = sql.format(item['compCode'], item['compUrl'], item['compName'], item['securityCode'], item['exchange'],
-                             item['securityName'], item['theDate'], item['wholeCapital'], item['circulatingCapital']
-                             , item['announcementUrl'])
-
-            self.cursor.execute(sql)
-
-            # print '---> insert ', item['securityCode'], item['exchange'], item['securityName'], 'success'
+            return True
         else:
-            print('---> 插入数据为空，插入失败！！！')
+            return False
 
+    def insert_many(self, upsert_sql_list):
+        if upsert_sql_list:
+            for upsert_sql in upsert_sql_list:
+                try:
+                    self.cursor.execute(upsert_sql)
+                except:
+                    self.conn.rollback()
+                    return False
+            self.conn.commit()
+            return True
+        return False

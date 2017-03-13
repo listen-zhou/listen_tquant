@@ -3,8 +3,6 @@
 import tquant as tt
 import threading
 from com.listen.tquant.dbservice.Service import DbService
-from com.listen.tquant.dbservice.items.item import StockInfo
-import json
 
 class StockInfoThread(threading.Thread):
     def __init__(self):
@@ -12,8 +10,7 @@ class StockInfoThread(threading.Thread):
         self.dbService = DbService()
         self.upsertStockInfoSql = "insert into tquant_security_info (security_code, security_name, " \
                                   "security_type, exchange_code) " \
-                                  "values ({security_code}, {security_name}, " \
-                                  "{security_type}, {exchange_code}) " \
+                                  "values ({security_code},{security_name},{security_type},{exchange_code}) " \
                                   "on duplicate key update " \
                                   "security_name=values(security_name) ";
 
@@ -22,13 +19,22 @@ class StockInfoThread(threading.Thread):
         stockList = tt.get_stocklist()
         indexValues = stockList.index.values
         columnsValues = ['id', 'name']
+        upsert_sql_list = []
         for idx in indexValues:
-            stockInfo = StockInfo(security_code=idx)
+            value = {'security_type' : 'STOCK'}
+            value['security_code'] = idx
             for column in columnsValues:
                 if column == 'name':
-                    stockInfo.security_name = stockList.at[idx, column]
+                    value['security_name'] = stockList.at[idx, column]
                 else:
-                    stockInfo.exchange_code = stockList.at[idx, column][0:stockList.at[idx, column].find(idx)].upper()
-            print(stockInfo.security_name, stockInfo.security_code, stockInfo.exchange_code)
+                    value['exchange_code'] = stockList.at[idx, column][0:stockList.at[idx, column].find(idx)].upper()
+            upsert_sql = self.upsertStockInfoSql.format(exchange_code="'"+value['exchange_code']+"'",
+                                                        security_code="'"+value['security_code']+"'",
+                                                        security_name="'"+value['security_name']+"'",
+                                                        security_type="'"+value['security_type']+"'")
+            #result = self.dbService.insert(upsert_sql)
+            upsert_sql_list.append(upsert_sql)
+        result = self.dbService.insert_many(upsert_sql_list)
+        print(upsert_sql_list, result)
 
 
