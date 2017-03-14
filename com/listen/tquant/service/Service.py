@@ -1,14 +1,15 @@
 # coding: utf-8
+import datetime
 
 import tquant as tt
 import threading
 from com.listen.tquant.dbservice.Service import DbService
 
 
-class StockInfoThread(threading.Thread):
-    def __init__(self):
-        threading.Thread.__init__(self)
-        self.dbService = DbService()
+class StockInfoService():
+    def __init__(self, dbService):
+        print('starting ... {}'.format(datetime.datetime.now()))
+        self.dbService = dbService
         self.upsert_stockinfo_sql = "insert into tquant_security_info (security_code, security_name, " \
                                   "security_type, exchange_code) " \
                                   "values ({security_code},{security_name},{security_type},{exchange_code}) " \
@@ -16,7 +17,7 @@ class StockInfoThread(threading.Thread):
                                   "security_name=values(security_name) "
 
     def run(self):
-        print(self.name, 'starting ...')
+        print('run ... {}'.format(datetime.datetime.now()))
         # stock_list type is DataFrame
         stock_list = tt.get_stocklist()
         # indexes_values type is []
@@ -35,12 +36,12 @@ class StockInfoThread(threading.Thread):
                     value_dict['security_name'] = stock_list.at[idx, column]
                 else:
                     value_dict['exchange_code'] = stock_list.at[idx, column][0:stock_list.at[idx, column].find(idx)].upper()
-            upsert_sql = self.upsertStockInfoSql.format(exchange_code="'"+value_dict['exchange_code']+"'",
+            upsert_sql = self.upsert_stockinfo_sql.format(exchange_code="'"+value_dict['exchange_code']+"'",
                                                         security_code="'"+value_dict['security_code']+"'",
                                                         security_name="'"+value_dict['security_name']+"'",
                                                         security_type="'"+value_dict['security_type']+"'")
             upsert_sql_list.append(upsert_sql)
         result = self.dbService.insert_many(upsert_sql_list)
-        print(upsert_sql_list, result)
+        print(len(upsert_sql_list), result)
 
 
