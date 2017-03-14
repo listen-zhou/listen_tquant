@@ -57,3 +57,11 @@ class DbService(object):
             return True
         return False
 
+    def query(self, query_sql):
+        if query_sql:
+            self.cursor.execute(query_sql)
+            stock_tuple_tuple = self.cursor.fetchall()
+            return stock_tuple_tuple
+        else:
+            return None
+
