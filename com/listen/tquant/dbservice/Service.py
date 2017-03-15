@@ -38,7 +38,6 @@ class DbService(object):
     # noinspection SpellCheckingInspection
     def insert(self, upsert_sql):
         if upsert_sql:
-            print(upsert_sql)
             self.cursor.execute(upsert_sql)
             return True
         else:

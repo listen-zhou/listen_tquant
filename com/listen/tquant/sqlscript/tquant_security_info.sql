@@ -13,5 +13,4 @@ CREATE TABLE `tquant_security_info` (
 COMMENT='证券基本信息表'
 COLLATE='utf8_general_ci'
 ENGINE=InnoDB
-AUTO_INCREMENT=6345
 ;

@@ -17,5 +17,4 @@ CREATE TABLE `tquant_stock_day_kline` (
 COMMENT='股票日K数据'
 COLLATE='utf8_general_ci'
 ENGINE=InnoDB
-AUTO_INCREMENT=11838
 ;
