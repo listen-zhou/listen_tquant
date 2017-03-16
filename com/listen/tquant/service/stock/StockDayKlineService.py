@@ -1,0 +1,151 @@
+# coding: utf-8
+import traceback
+from decimal import *
+import types
+
+import numpy
+import tquant as tt
+import datetime
+import time
+
+
+class StockDayKlineService():
+    """
+    股票日K数据处理服务
+    """
+    def __init__(self, dbService):
+        print('StockDayKlineService init ... {}'.format(datetime.datetime.now()))
+        self.dbService = dbService
+        self.query_stock_code_sql = "select security_code from tquant_security_info " \
+                               "where security_code not in " \
+                               "(select security_code from  tquant_stock_process_progress " \
+                               "where security_type = 'STOCK' and business_type = 'STOCK_DAY_KLINE' " \
+                               "and security_type = 'STOCK' and process_progress = 1) order by security_code asc "
+        self.upsert = 'insert into tquant_stock_day_kline (security_code, the_date, ' \
+                 'amount, vol, open, high, low, close) ' \
+                 'values ({security_code}, {the_date}, ' \
+                 '{amount}, {vol}, {open}, {high}, {low}, {close}) ' \
+                 'on duplicate key update ' \
+                 'amount=values(amount), vol=values(vol), open=values(open), ' \
+                 'high=values(high), low=values(low), close=values(close) '
+        self.upsert_process_progress = "insert into tquant_stock_process_progress (business_type, security_code, security_type, " \
+                                  "process_progress) " \
+                                  "values ({business_type}, {security_code}, {security_type}, {process_progress}) " \
+                                  "on duplicate key update " \
+                                  "process_progress=values(process_progress)"
+
+    def get_all_stock_day_kline(self):
+        """
+        查询股票日K数据，并解析入库
+        根据已有的股票代码，循环查询单个股票的日K数据，并解析入库
+        :return:
+        """
+        print('StockDayKlineService get_all_stock_day_kline start ... {}'.format(datetime.datetime.now()))
+        getcontext().prec = 4
+        stock_tuple_tuple = self.dbService.query(self.query_stock_code_sql)
+        if stock_tuple_tuple:
+            for stock_item in stock_tuple_tuple:
+                try:
+                    security_code = stock_item[0]
+                    # 注释掉的这行是因为在测试的时候发现返回的数据有问题，
+                    # 当 security_code == '000505' the_date='2010-01-04' 时，返回的数据为：
+                    # amount: [ 39478241.  39478241.]vol: [ 5286272.  5286272.]open: [ 7.5  7.5]high: [ 7.65  7.65]low: [ 7.36  7.36]close: [ 7.44  7.44]
+                    # 正常返回的数据为：
+                    # amount: 37416387.0 vol: 4989934.0 open: 7.36 high: 7.69 low: 7.36 close: 7.48
+                    # 所以为了处理这个不同类型的情况，做了判断和检测测试
+                    # if security_code == '000505':
+                    day_kline = tt.get_all_daybar(security_code, 'bfq')
+                    indexes_values = day_kline.index.values
+                    upsert_sql_list = []
+                    add_up = 0
+                    process_line = ''
+                    for idx in indexes_values:
+                        upsert_sql = self.analysis_stock_day_kline_columns(day_kline, idx, security_code, self.upsert)
+                        if len(upsert_sql_list) == 100:
+                            self.dbService.insert_many(upsert_sql_list)
+                            process_line += '='
+                            upsert_sql_list = []
+                            upsert_sql_list.append(upsert_sql)
+                            processing = Decimal(add_up) / Decimal(len(indexes_values)) * 100
+                            print(security_code, 'day_kline size:', len(indexes_values), 'processing ', process_line,
+                                  str(processing) + '%')
+                            add_up += 1
+                            time.sleep(1)
+                        else:
+                            upsert_sql_list.append(upsert_sql)
+                            add_up += 1
+                    if len(upsert_sql_list) > 0:
+                        self.dbService.insert_many(upsert_sql_list)
+                        process_line += '='
+                    self.dbService.insert(self.upsert_process_progress.format(
+                        business_type="'" + 'STOCK_DAY_KLINE' + "'",
+                        security_code="'" + security_code + "'",
+                        security_type="'" + 'STOCK' + "'",
+                        process_progress=1
+                    ))
+                    processing = Decimal(add_up)/Decimal(len(indexes_values)) * 100
+                    print(security_code, 'day_kline size:', len(indexes_values), 'processing ', process_line,
+                          str(processing) + '%')
+                    print('=============================================')
+                except Exception:
+                    print('except exception security_code:', security_code)
+                    traceback.print_exc()
+        print('StockDayKlineService get_all_stock_day_kline end ... {}'.format(datetime.datetime.now()))
+
+    def analysis_stock_day_kline_columns(self, day_kline, idx, security_code, upsert_sql):
+        """
+        解析股票日K数据（每行）
+        :param day_kline: 日K的DataFrame对象
+        :param idx: day_kline的单行索引值，这里是日期值
+        :param security_code: 证券代码，这里是股票代码
+        :param upsert_sql: 需要执行update的sql语句，解析单行完成后将参数设置upsert_sql语句中
+        :return: 返回值为设置完后的upsert_sql，即已经填充了解析后的值
+        """
+        value_dict = {}
+        value_dict['security_code'] = security_code
+        the_date = (str(idx))[0:10]
+        value_dict['the_date'] = the_date
+
+        amount = day_kline.at[idx, 'amount']
+        # amount的类型为numpy.ndarray，是一个多维数组，可能包含多个值，其他的字段也是一样，测试的时候发现有异常抛出
+        if isinstance(amount, numpy.ndarray) and amount.size > 1:
+            amount = amount.tolist()[0]
+        value_dict['amount'] = round(float(amount) / 10000, 4)
+
+        vol = day_kline.at[idx, 'vol']
+        if isinstance(vol, numpy.ndarray) and vol.size > 1:
+            vol = vol.tolist()[0]
+        value_dict['vol'] = round(float(vol) / 1000000, 4)
+
+        open = day_kline.at[idx, 'open']
+        if isinstance(open, numpy.ndarray) and open.size > 1:
+            open = open.tolist()[0]
+        value_dict['open'] = round(float(open), 2)
+
+        high = day_kline.at[idx, 'high']
+        if isinstance(high, numpy.ndarray) and high.size > 1:
+            high = high.tolist()[0]
+        value_dict['high'] = round(float(high), 2)
+
+        low = day_kline.at[idx, 'low']
+        if isinstance(low, numpy.ndarray) and low.size > 1:
+            low = low.tolist()[0]
+        value_dict['low'] = round(float(low), 2)
+
+        close = day_kline.at[idx, 'close']
+        if isinstance(close, numpy.ndarray) and close.size > 1:
+            close = close.tolist()[0]
+        value_dict['close'] = round(float(close), 2)
+
+        upsert_sql = upsert_sql.format(
+            security_code="'" + value_dict['security_code'] + "'",
+            the_date="'" + value_dict['the_date'] + "'",
+            amount=value_dict['amount'],
+            vol=value_dict['vol'],
+            open=value_dict['open'],
+            high=value_dict['high'],
+            low=value_dict['low'],
+            close=value_dict['close']
+        )
+
+        return upsert_sql
