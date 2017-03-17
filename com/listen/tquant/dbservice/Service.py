@@ -3,7 +3,7 @@
 import pymysql
 import configparser
 import os
-
+import traceback
 
 class DbService(object):
     def __init__(self):
@@ -37,30 +37,39 @@ class DbService(object):
 
     # noinspection SpellCheckingInspection
     def insert(self, upsert_sql):
-        if upsert_sql:
-            self.cursor.execute(upsert_sql)
-            return True
-        else:
-            return False
+        try:
+            if upsert_sql:
+                self.cursor.execute(upsert_sql)
+                return True
+            else:
+                return False
+        except Exception:
+            traceback.print_exc()
 
     # noinspection SpellCheckingInspection,PyBroadException
     def insert_many(self, upsert_sql_list):
-        if upsert_sql_list:
-            for upsert_sql in upsert_sql_list:
-                try:
-                    self.cursor.execute(upsert_sql)
-                except Exception:
-                    self.conn.rollback()
-                    return False
-            self.conn.commit()
-            return True
-        return False
+        try:
+            if upsert_sql_list:
+                for upsert_sql in upsert_sql_list:
+                    try:
+                        self.cursor.execute(upsert_sql)
+                    except Exception:
+                        self.conn.rollback()
+                        return False
+                self.conn.commit()
+                return True
+            return False
+        except Exception:
+            self.conn.rollback()
+            traceback.print_exc()
 
     def query(self, query_sql):
-        if query_sql:
-            self.cursor.execute(query_sql)
-            stock_tuple_tuple = self.cursor.fetchall()
-            return stock_tuple_tuple
-        else:
-            return None
-
+        try:
+            if query_sql:
+                self.cursor.execute(query_sql)
+                stock_tuple_tuple = self.cursor.fetchall()
+                return stock_tuple_tuple
+            else:
+                return None
+        except Exception:
+            traceback.print_exc()

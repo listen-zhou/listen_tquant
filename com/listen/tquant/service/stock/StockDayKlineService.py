@@ -42,55 +42,60 @@ class StockDayKlineService():
         """
         print('StockDayKlineService get_all_stock_day_kline start ... {}'.format(datetime.datetime.now()))
         getcontext().prec = 4
-        stock_tuple_tuple = self.dbService.query(self.query_stock_code_sql)
-        if stock_tuple_tuple:
-            for stock_item in stock_tuple_tuple:
-                try:
-                    security_code = stock_item[0]
-                    # 注释掉的这行是因为在测试的时候发现返回的数据有问题，
-                    # 当 security_code == '000505' the_date='2010-01-04' 时，返回的数据为：
-                    # amount: [ 39478241.  39478241.]vol: [ 5286272.  5286272.]open: [ 7.5  7.5]high: [ 7.65  7.65]low: [ 7.36  7.36]close: [ 7.44  7.44]
-                    # 正常返回的数据为：
-                    # amount: 37416387.0 vol: 4989934.0 open: 7.36 high: 7.69 low: 7.36 close: 7.48
-                    # 所以为了处理这个不同类型的情况，做了判断和检测测试
-                    # if security_code == '000505':
-                    day_kline = tt.get_all_daybar(security_code, 'bfq')
-                    indexes_values = day_kline.index.values
-                    upsert_sql_list = []
-                    add_up = 0
-                    process_line = ''
-                    for idx in indexes_values:
-                        upsert_sql = self.analysis_stock_day_kline_columns(day_kline, idx, security_code, self.upsert)
-                        if len(upsert_sql_list) == 100:
-                            self.dbService.insert_many(upsert_sql_list)
-                            process_line += '='
-                            upsert_sql_list = []
-                            upsert_sql_list.append(upsert_sql)
-                            processing = Decimal(add_up) / Decimal(len(indexes_values)) * 100
-                            print(security_code, 'day_kline size:', len(indexes_values), 'processing ', process_line,
-                                  str(processing) + '%')
-                            add_up += 1
-                            time.sleep(1)
-                        else:
-                            upsert_sql_list.append(upsert_sql)
-                            add_up += 1
-                    if len(upsert_sql_list) > 0:
-                        self.dbService.insert_many(upsert_sql_list)
-                        process_line += '='
-                    self.dbService.insert(self.upsert_process_progress.format(
-                        business_type="'" + 'STOCK_DAY_KLINE' + "'",
-                        security_code="'" + security_code + "'",
-                        security_type="'" + 'STOCK' + "'",
-                        process_progress=1
-                    ))
-                    processing = Decimal(add_up)/Decimal(len(indexes_values)) * 100
-                    print(security_code, 'day_kline size:', len(indexes_values), 'processing ', process_line,
-                          str(processing) + '%')
-                    print('=============================================')
-                except Exception:
-                    print('except exception security_code:', security_code)
-                    traceback.print_exc()
+        try:
+            stock_tuple_tuple = self.dbService.query(self.query_stock_code_sql)
+            if stock_tuple_tuple:
+                for stock_item in stock_tuple_tuple:
+                    try:
+                        security_code = stock_item[0]
+                        # 注释掉的这行是因为在测试的时候发现返回的数据有问题，
+                        # 当 security_code == '000505' the_date='2010-01-04' 时，返回的数据为：
+                        # amount: [ 39478241.  39478241.]vol: [ 5286272.  5286272.]open: [ 7.5  7.5]high: [ 7.65  7.65]low: [ 7.36  7.36]close: [ 7.44  7.44]
+                        # 正常返回的数据为：
+                        # amount: 37416387.0 vol: 4989934.0 open: 7.36 high: 7.69 low: 7.36 close: 7.48
+                        # 所以为了处理这个不同类型的情况，做了判断和检测测试
+                        # if security_code == '000505':
+                        day_kline = tt.get_all_daybar(security_code, 'bfq')
+                        indexes_values = day_kline.index.values
+                        upsert_sql_list = []
+                        add_up = 0
+                        process_line = ''
+                        for idx in indexes_values:
+                            upsert_sql = self.analysis_stock_day_kline_columns(day_kline, idx, security_code,
+                                                                               self.upsert)
+                            if len(upsert_sql_list) == 100:
+                                self.dbService.insert_many(upsert_sql_list)
+                                process_line += '='
+                                upsert_sql_list = []
+                                upsert_sql_list.append(upsert_sql)
+                                processing = Decimal(add_up) / Decimal(len(indexes_values)) * 100
+                                print(security_code, 'day_kline size:', len(indexes_values), 'processing ',
+                                      process_line,
+                                      str(processing) + '%')
+                                add_up += 1
+                                time.sleep(1)
+                            else:
+                                upsert_sql_list.append(upsert_sql)
+                                add_up += 1
+                    except Exception:
+                        traceback.print_exc()
+                if len(upsert_sql_list) > 0:
+                    self.dbService.insert_many(upsert_sql_list)
+                    process_line += '='
+                self.dbService.insert(self.upsert_process_progress.format(
+                    business_type="'" + 'STOCK_DAY_KLINE' + "'",
+                    security_code="'" + security_code + "'",
+                    security_type="'" + 'STOCK' + "'",
+                    process_progress=1
+                ))
+                processing = Decimal(add_up) / Decimal(len(indexes_values)) * 100
+                print(security_code, 'day_kline size:', len(indexes_values), 'processing ', process_line,
+                      str(processing) + '%')
+                print('=============================================')
+        except Exception:
+            traceback.print_exc()
         print('StockDayKlineService get_all_stock_day_kline end ... {}'.format(datetime.datetime.now()))
+
 
     def analysis_stock_day_kline_columns(self, day_kline, idx, security_code, upsert_sql):
         """
