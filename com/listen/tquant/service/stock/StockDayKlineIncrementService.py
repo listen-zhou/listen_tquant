@@ -86,7 +86,7 @@ class StockDayKlineIncrementService():
                                       str(processing) + '%')
                                 add_up += 1
                                 # 批量提交数据后当前线程休眠1秒
-                                time.sleep(1)
+                                # time.sleep(1)
                             else:
                                 upsert_sql_list.append(upsert_sql)
                                 add_up += 1
@@ -98,7 +98,7 @@ class StockDayKlineIncrementService():
                             print(datetime.datetime.now(), 'StockDayKlineIncrementService outer', security_code, 'day_kline size:', len(indexes_values), 'processing ', process_line,
                                   str(processing) + '%')
                         print(datetime.datetime.now(), '=============================================')
-                        time.sleep(1)
+                        # time.sleep(1)
 
                         # 批量(100)增量列表的处理进度打印
                         if data_add_up % 100 == 0:
@@ -108,7 +108,7 @@ class StockDayKlineIncrementService():
                                   data_process_line,
                                   str(processing) + '%')
                             data_add_up += 1
-                            time.sleep(1)
+                            # time.sleep(1)
                         else:
                             data_add_up += 1
                     except Exception:
@@ -121,7 +121,7 @@ class StockDayKlineIncrementService():
                           data_process_line,
                           str(processing) + '%')
                     print(datetime.datetime.now(), '########################################')
-                    time.sleep(1)
+                    # time.sleep(1)
         except Exception:
             traceback.print_exc()
         print(datetime.datetime.now(), 'StockDayKlineIncrementService get_all_stock_day_kline end ... {}'.format(datetime.datetime.now()))
