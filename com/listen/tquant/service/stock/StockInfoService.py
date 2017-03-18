@@ -68,7 +68,7 @@ class StockInfoService():
                         print(datetime.datetime.now(), 'StockInfoService inner get_stock_info size:', len(indexes_values), 'processing ', process_line,
                               str(processing) + '%')
                         add_up += 1
-                        time.sleep(1)
+                        # time.sleep(1)
                     else:
                         upsert_sql_list.append(upsert_sql)
                         add_up += 1

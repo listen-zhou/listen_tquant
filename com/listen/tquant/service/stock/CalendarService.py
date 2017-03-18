@@ -87,7 +87,7 @@ class CalendarService():
                         print(datetime.datetime.now(), 'CalendarServiceService inner get_calendar_info size:', len(result_list), 'processing ', process_line,
                               str(processing) + '%')
                         add_up += 1
-                        time.sleep(1)
+                        # time.sleep(1)
                     else:
                         upsert_sql_list.append(upsert_sql)
                         add_up += 1
