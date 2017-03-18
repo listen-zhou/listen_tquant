@@ -105,14 +105,14 @@ class StockDayKlineService():
                             processing = Decimal(add_up) / Decimal(len(indexes_values)) * 100
                             print(datetime.datetime.now(), 'StockDayKlineService outer', security_code, 'day_kline size:', len(indexes_values), 'processing ', process_line,
                                   str(processing) + '%')
-                        print(datetime.datetime.now(), '=============================================')
+                        print(datetime.datetime.now(), 'StockDayKlineService =============================================')
                         time.sleep(1)
 
                         # 批量(100)列表的处理进度打印
                         if data_add_up % 100 == 0:
                             data_process_line += '#'
                             processing = Decimal(data_add_up) / Decimal(len(stock_tuple_tuple)) * 100
-                            print(datetime.datetime.now(), 'StockDayKlineService data inner ', 'stock_tuple_tuple size:', len(stock_tuple_tuple), 'processing ',
+                            print(datetime.datetime.now(), 'StockDayKlineService data inner', 'stock_tuple_tuple size:', len(stock_tuple_tuple), 'processing ',
                                   data_process_line,
                                   str(processing) + '%')
                             data_add_up += 1
@@ -125,10 +125,10 @@ class StockDayKlineService():
                 if data_add_up % 100 != 0:
                     data_process_line += '#'
                     processing = Decimal(data_add_up) / Decimal(len(stock_tuple_tuple)) * 100
-                    print(datetime.datetime.now(), 'StockDayKlineService data outer ', 'stock_tuple_tuple size:', len(stock_tuple_tuple), 'processing ',
+                    print(datetime.datetime.now(), 'StockDayKlineService data outer', 'stock_tuple_tuple size:', len(stock_tuple_tuple), 'processing ',
                           data_process_line,
                           str(processing) + '%')
-                    print(datetime.datetime.now(), '########################################')
+                    print(datetime.datetime.now(), 'StockDayKlineService ########################################')
                     time.sleep(1)
         except Exception:
             traceback.print_exc()

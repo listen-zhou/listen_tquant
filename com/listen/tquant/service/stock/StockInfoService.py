@@ -81,7 +81,7 @@ class StockInfoService():
             processing = Decimal(add_up) / Decimal(len(indexes_values)) * 100
             print(datetime.datetime.now(), 'StockInfoService outer get_stock_info size:', len(indexes_values), 'processing ', process_line,
                   str(processing) + '%')
-            print(datetime.datetime.now(), '=============================================')
+            print(datetime.datetime.now(), 'StockInfoService =============================================')
         except Exception:
             traceback.print_exc()
         print(datetime.datetime.now(), 'StockInfoService get_stock_info end ... {}'.format(datetime.datetime.now()))

@@ -98,7 +98,7 @@ class CalendarService():
                 process_line += '='
             processing = Decimal(add_up) / Decimal(len(result_list)) * 100
             print(datetime.datetime.now(), 'CalendarServiceService outer get_calendar_info size:', len(result_list), 'processing ', process_line, str(processing) + '%')
-            print(datetime.datetime.now(), '=============================================')
+            print(datetime.datetime.now(), 'CalendarServiceService =============================================')
         except Exception:
             traceback.print_exc()
         print(datetime.datetime.now(), 'CalendarServiceService get_calendar_info end ... {}'.format(datetime.datetime.now()))

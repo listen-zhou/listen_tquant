@@ -10,7 +10,7 @@ class DbService(object):
         # charset必须设置为utf8，而不能为utf-8
         config = configparser.ConfigParser()
         os.chdir('../config')
-        file_path = os.getcwd() + '\config.ini'
+        file_path = os.getcwd() + '\config.cfg'
         print(file_path)
         config.read(file_path)
         mysql_section = config['mysql']
