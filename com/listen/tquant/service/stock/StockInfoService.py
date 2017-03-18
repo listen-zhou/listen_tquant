@@ -15,7 +15,7 @@ class StockInfoService():
     调用tquant全部A股接口，处理返回数据，并入库
     """
     def __init__(self, dbService):
-        print('StockInfoService init ... {}'.format(datetime.datetime.now()))
+        print(datetime.datetime.now(), 'StockInfoService init ... {}'.format(datetime.datetime.now()))
         self.dbService = dbService
         self.upsert_stock_info_sql = "insert into tquant_security_info (security_code, security_name, " \
                                     "security_type, exchange_code) " \
@@ -28,7 +28,7 @@ class StockInfoService():
         调用股票查询接口，返回全部A股基本信息，并解析入库
         :return:
         """
-        print('StockInfoService get_stock_info start ... {}'.format(datetime.datetime.now()))
+        print(datetime.datetime.now(), 'StockInfoService get_stock_info start ... {}'.format(datetime.datetime.now()))
         getcontext().prec = 4
         try:
             # 股票基本信息返回结果为 DataFrame
@@ -39,7 +39,9 @@ class StockInfoService():
             columns_values = ['id', 'name']
             # 临时存储需要批量执行更新的sql语句，是个list
             upsert_sql_list = []
+            # 数据处理进度计数
             add_up = 0
+            # 数据处理进度打印字符
             process_line = ''
             for idx in indexes_values:
                 # 定义临时存储单行数据的字典，用以后续做执行sql的数据填充
@@ -63,7 +65,7 @@ class StockInfoService():
                         process_line += '='
                         processing = Decimal(add_up) / Decimal(len(indexes_values)) * 100
                         upsert_sql_list.append(upsert_sql)
-                        print('get_stock_info size:', len(indexes_values), 'processing ', process_line,
+                        print(datetime.datetime.now(), 'StockInfoService inner get_stock_info size:', len(indexes_values), 'processing ', process_line,
                               str(processing) + '%')
                         add_up += 1
                         time.sleep(1)
@@ -71,15 +73,15 @@ class StockInfoService():
                         upsert_sql_list.append(upsert_sql)
                         add_up += 1
                 except Exception:
-                    print('except exception value_dict:', value_dict)
+                    print(datetime.datetime.now(), 'StockInfoService except exception value_dict:', value_dict)
                     traceback.print_exc()
             if len(upsert_sql_list) > 0:
                 self.dbService.insert_many(upsert_sql_list)
                 process_line += '='
             processing = Decimal(add_up) / Decimal(len(indexes_values)) * 100
-            print('get_stock_info size:', len(indexes_values), 'processing ', process_line,
+            print(datetime.datetime.now(), 'StockInfoService outer get_stock_info size:', len(indexes_values), 'processing ', process_line,
                   str(processing) + '%')
-            print('=============================================')
+            print(datetime.datetime.now(), '=============================================')
         except Exception:
             traceback.print_exc()
-        print('StockInfoService get_stock_info end ... {}'.format(datetime.datetime.now()))
+        print(datetime.datetime.now(), 'StockInfoService get_stock_info end ... {}'.format(datetime.datetime.now()))

@@ -15,7 +15,7 @@ class CalendarService():
     调用tquant交易日接口，处理返回数据，并入库
     """
     def __init__(self, dbService):
-        print('CalendarServiceService init ... {}'.format(datetime.datetime.now()))
+        print(datetime.datetime.now(), 'CalendarServiceService init ... {}'.format(datetime.datetime.now()))
         self.dbService = dbService
         self.upsert_calendar_info_sql = "insert into tquant_calendar_info (the_date, is_month_end, is_month_start, " \
                                         "is_quarter_end, is_quarter_start, is_year_end, is_year_start, day_of_week, " \
@@ -33,26 +33,37 @@ class CalendarService():
         调用交易日查询接口，返回信息，并解析入库
         :return:
         """
-        print('CalendarServiceService get_calendar_info start ... {}'.format(datetime.datetime.now()))
+        print(datetime.datetime.now(), 'CalendarServiceService get_calendar_info start ... {}'.format(datetime.datetime.now()))
         getcontext().prec = 4
         upsert_sql_list = []
         add_up = 0
         process_line = ''
         try:
+            # 全部交易日数据
             result_list = tt.get_calendar('1970-01-01', '2018-01-01')
             for calendar in result_list:
                 # 定义临时存储单行数据的字典，用以后续做执行sql的数据填充
                 value_dict = {}
                 try:
+                    # 交易日
                     value_dict['the_date'] = str(calendar.date())
+                    # 是否月末，1-是，0-否
                     value_dict['is_month_end'] = 1 if calendar.is_month_end else 0
+                    # 是否月初，1-是，0-否
                     value_dict['is_month_start'] = 1 if calendar.is_month_start else 0
+                    # 是否季末，1-是，0-否
                     value_dict['is_quarter_end'] = 1 if calendar.is_quarter_end else 0
+                    # 是否季末，1-是，0-否
                     value_dict['is_quarter_start'] = 1 if calendar.is_quarter_start else 0
+                    # 是否年末，1-是，0-否
                     value_dict['is_year_end'] = 1 if calendar.is_year_end else 0
+                    # 是否初末，1-是，0-否
                     value_dict['is_year_start'] = 1 if calendar.is_year_start else 0
+                    # 周几，从0开始，即0-周一，1-周二
                     value_dict['day_of_week'] = calendar.dayofweek
+                    # 当前所在周是年当中的第几周
                     value_dict['week_of_year'] = calendar.weekofyear
+                    # 第几季度，从1开始
                     value_dict['quarter'] = calendar.quarter
 
                     upsert_sql = self.upsert_calendar_info_sql.format(
@@ -73,7 +84,7 @@ class CalendarService():
                         process_line += '='
                         processing = Decimal(add_up) / Decimal(len(result_list)) * 100
                         upsert_sql_list.append(upsert_sql)
-                        print('get_calendar_info size:', len(result_list), 'processing ', process_line,
+                        print(datetime.datetime.now(), 'CalendarServiceService inner get_calendar_info size:', len(result_list), 'processing ', process_line,
                               str(processing) + '%')
                         add_up += 1
                         time.sleep(1)
@@ -86,8 +97,8 @@ class CalendarService():
                 self.dbService.insert_many(upsert_sql_list)
                 process_line += '='
             processing = Decimal(add_up) / Decimal(len(result_list)) * 100
-            print('get_calendar_info size:', len(result_list), 'processing ', process_line, str(processing) + '%')
-            print('=============================================')
+            print(datetime.datetime.now(), 'CalendarServiceService outer get_calendar_info size:', len(result_list), 'processing ', process_line, str(processing) + '%')
+            print(datetime.datetime.now(), '=============================================')
         except Exception:
             traceback.print_exc()
-        print('CalendarServiceService get_calendar_info end ... {}'.format(datetime.datetime.now()))
+        print(datetime.datetime.now(), 'CalendarServiceService get_calendar_info end ... {}'.format(datetime.datetime.now()))

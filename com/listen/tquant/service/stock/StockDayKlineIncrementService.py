@@ -9,18 +9,16 @@ import datetime
 import time
 
 
-class StockDayKlineService():
+class StockDayKlineIncrementService():
     """
-    股票日K数据处理服务
+    股票日K数据增量处理服务
     """
     def __init__(self, dbService):
-        print(datetime.datetime.now(), 'StockDayKlineService init ... {}'.format(datetime.datetime.now()))
+        print(datetime.datetime.now(), 'StockDayKlineIncrementService init ... {}'.format(datetime.datetime.now()))
         self.dbService = dbService
-        self.query_stock_code_sql = "select security_code from tquant_security_info " \
-                               "where security_code not in " \
-                               "(select security_code from  tquant_stock_process_progress " \
-                               "where security_type = 'STOCK' and business_type = 'STOCK_DAY_KLINE' " \
-                               "and security_type = 'STOCK' and process_progress = 1) order by security_code asc "
+        self.query_stock_code_sql = "select a.security_code , " \
+                                    "(select count(*) from tquant_calendar_info where the_date > max(a.the_date)) diff_day " \
+                                    "from tquant_stock_day_kline a group by a.security_code having diff_day > 0"
         self.upsert = 'insert into tquant_stock_day_kline (security_code, the_date, ' \
                  'amount, vol, open, high, low, close) ' \
                  'values ({security_code}, {the_date}, ' \
@@ -28,11 +26,6 @@ class StockDayKlineService():
                  'on duplicate key update ' \
                  'amount=values(amount), vol=values(vol), open=values(open), ' \
                  'high=values(high), low=values(low), close=values(close) '
-        self.upsert_process_progress = "insert into tquant_stock_process_progress (business_type, security_code, security_type, " \
-                                  "process_progress) " \
-                                  "values ({business_type}, {security_code}, {security_type}, {process_progress}) " \
-                                  "on duplicate key update " \
-                                  "process_progress=values(process_progress)"
 
     def get_all_stock_day_kline(self):
         """
@@ -40,20 +33,25 @@ class StockDayKlineService():
         根据已有的股票代码，循环查询单个股票的日K数据，并解析入库
         :return:
         """
-        print(datetime.datetime.now(), 'StockDayKlineService get_all_stock_day_kline start ... {}'.format(datetime.datetime.now()))
+        print(datetime.datetime.now(), 'StockDayKlineIncrementService get_all_stock_day_kline start ... {}'.format(datetime.datetime.now()))
         getcontext().prec = 4
         try:
-            # 需要处理的股票代码
+            # 需要增量处理的股票代码
             stock_tuple_tuple = self.dbService.query(self.query_stock_code_sql)
             if stock_tuple_tuple:
-                # 需要处理的股票代码进度计数
+                # 需要增量处理的股票代码进度计数
                 data_add_up = 0
-                # 需要处理的股票代码进度打印字符
+                # 需要增量处理的股票代码进度打印字符
                 data_process_line = ''
                 for stock_item in stock_tuple_tuple:
                     try:
                         # 股票代码
                         security_code = stock_item[0]
+                        # 增量日K天数
+                        diff_day = stock_item[1]
+                        # 如果增量时间相差天数为0，则不需要重新拉取，已经在sql查询语句设置>0的限制，下面的判断可省略
+                        if diff_day == 0:
+                            continue
                         # 注释掉的这行是因为在测试的时候发现返回的数据有问题，
                         # 当 security_code == '000505' the_date='2010-01-04' 时，返回的数据为：
                         # amount: [ 39478241.  39478241.]vol: [ 5286272.  5286272.]open: [ 7.5  7.5]high: [ 7.65  7.65]low: [ 7.36  7.36]close: [ 7.44  7.44]
@@ -61,8 +59,8 @@ class StockDayKlineService():
                         # amount: 37416387.0 vol: 4989934.0 open: 7.36 high: 7.69 low: 7.36 close: 7.48
                         # 所以为了处理这个不同类型的情况，做了判断和检测测试
                         # if security_code == '000505':
-                        # 查询security_code近diff_day的股票全部日K数据
-                        day_kline = tt.get_all_daybar(security_code, 'bfq')
+                        # 查询security_code近diff_day的股票增量日K数据
+                        day_kline = tt.get_last_n_daybar(security_code, diff_day, 'bfq')
                         # 索引值为日期
                         indexes_values = day_kline.index.values
                         # 临时存储批量更新sql的列表
@@ -83,7 +81,7 @@ class StockDayKlineService():
                                 upsert_sql_list = []
                                 upsert_sql_list.append(upsert_sql)
                                 processing = Decimal(add_up) / Decimal(len(indexes_values)) * 100
-                                print(datetime.datetime.now(), 'StockDayKlineService inner', security_code, 'day_kline size:', len(indexes_values), 'processing ',
+                                print(datetime.datetime.now(), 'StockDayKlineIncrementService inner', security_code, 'day_kline size:', len(indexes_values), 'processing ',
                                       process_line,
                                       str(processing) + '%')
                                 add_up += 1
@@ -96,23 +94,17 @@ class StockDayKlineService():
                         if len(upsert_sql_list) > 0:
                             self.dbService.insert_many(upsert_sql_list)
                             process_line += '='
-                            self.dbService.insert(self.upsert_process_progress.format(
-                                business_type="'" + 'STOCK_DAY_KLINE' + "'",
-                                security_code="'" + security_code + "'",
-                                security_type="'" + 'STOCK' + "'",
-                                process_progress=1
-                            ))
                             processing = Decimal(add_up) / Decimal(len(indexes_values)) * 100
-                            print(datetime.datetime.now(), 'StockDayKlineService outer', security_code, 'day_kline size:', len(indexes_values), 'processing ', process_line,
+                            print(datetime.datetime.now(), 'StockDayKlineIncrementService outer', security_code, 'day_kline size:', len(indexes_values), 'processing ', process_line,
                                   str(processing) + '%')
                         print(datetime.datetime.now(), '=============================================')
                         time.sleep(1)
 
-                        # 批量(100)列表的处理进度打印
+                        # 批量(100)增量列表的处理进度打印
                         if data_add_up % 100 == 0:
                             data_process_line += '#'
                             processing = Decimal(data_add_up) / Decimal(len(stock_tuple_tuple)) * 100
-                            print(datetime.datetime.now(), 'StockDayKlineService data inner ', 'stock_tuple_tuple size:', len(stock_tuple_tuple), 'processing ',
+                            print(datetime.datetime.now(), 'StockDayKlineIncrementService data inner ', 'stock_tuple_tuple size:', len(stock_tuple_tuple), 'processing ',
                                   data_process_line,
                                   str(processing) + '%')
                             data_add_up += 1
@@ -125,14 +117,14 @@ class StockDayKlineService():
                 if data_add_up % 100 != 0:
                     data_process_line += '#'
                     processing = Decimal(data_add_up) / Decimal(len(stock_tuple_tuple)) * 100
-                    print(datetime.datetime.now(), 'StockDayKlineService data outer ', 'stock_tuple_tuple size:', len(stock_tuple_tuple), 'processing ',
+                    print(datetime.datetime.now(), 'StockDayKlineIncrementService data outer ', 'stock_tuple_tuple size:', len(stock_tuple_tuple), 'processing ',
                           data_process_line,
                           str(processing) + '%')
                     print(datetime.datetime.now(), '########################################')
                     time.sleep(1)
         except Exception:
             traceback.print_exc()
-        print(datetime.datetime.now(), 'StockDayKlineService get_all_stock_day_kline end ... {}'.format(datetime.datetime.now()))
+        print(datetime.datetime.now(), 'StockDayKlineIncrementService get_all_stock_day_kline end ... {}'.format(datetime.datetime.now()))
 
 
     def analysis_stock_day_kline_columns(self, day_kline, idx, security_code, upsert_sql):
