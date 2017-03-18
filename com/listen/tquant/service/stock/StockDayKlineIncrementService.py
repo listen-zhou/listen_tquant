@@ -61,6 +61,8 @@ class StockDayKlineIncrementService():
                         # if security_code == '000505':
                         # 查询security_code近diff_day的股票增量日K数据
                         day_kline = tt.get_last_n_daybar(security_code, diff_day, 'bfq')
+                        # 这个地方为什么要打印，是为了让你看清楚，返回的数据是什么样的，最终的处理结果是什么样，不要怀疑程序，要看清楚数据
+                        print(day_kline)
                         # 索引值为日期
                         indexes_values = day_kline.index.values
                         # 临时存储批量更新sql的列表
