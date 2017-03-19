@@ -19,3 +19,10 @@ COMMENT='证券交易日表\r\n'
 COLLATE='utf8_general_ci'
 ENGINE=InnoDB
 ;
+
+ALTER TABLE `tquant_calendar_info`
+	ADD COLUMN `year` INT(11) NOT NULL COMMENT '年度（数字）' AFTER `quarter`,
+	ADD COLUMN `month` INT(11) NOT NULL COMMENT '月度（数字）' AFTER `year`;
+ALTER TABLE `tquant_calendar_info`
+	ADD INDEX `year` (`year`),
+	ADD INDEX `month` (`month`);

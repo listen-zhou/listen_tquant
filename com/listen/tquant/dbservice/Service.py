@@ -73,3 +73,27 @@ class DbService(object):
                 return None
         except Exception:
             traceback.print_exc()
+
+    # 证券数据处理进度表upsert操作
+    def upsert_tquant_security_process_progress(self, data_dict):
+        if data_dict:
+            sql = "insert into tquant_security_process_progress (" \
+                  "business_type, security_code, security_type, exchange_code, process_progress" \
+                  ") " \
+                  "values (" \
+                  "{business_type}, {security_code}, {security_type}, {exchange_code}, {process_progress}" \
+                  ") " \
+                  "on duplicate key update " \
+                  "process_progress=values(process_progress)"
+            try:
+                sql = sql.format(
+                    business_type="'" + data_dict['business_type'] + "'",
+                    security_code="'" + data_dict['security_code'] + "'",
+                    security_type="'" + data_dict['security_type'] + "'",
+                    exchange_code="'" + data_dict['exchange_code'] + "'",
+                    process_progress=data_dict['process_progress']
+                )
+                self.cursor.execute(sql)
+            except Exception:
+                traceback.print_exc()
+

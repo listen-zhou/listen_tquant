@@ -19,14 +19,15 @@ class CalendarService():
         self.dbService = dbService
         self.upsert_calendar_info_sql = "insert into tquant_calendar_info (the_date, is_month_end, is_month_start, " \
                                         "is_quarter_end, is_quarter_start, is_year_end, is_year_start, day_of_week, " \
-                                        "week_of_year, quarter) " \
+                                        "week_of_year, quarter, year, month) " \
                                         "values ({the_date}, {is_month_end}, {is_month_start}, {is_quarter_end}, " \
                                         "{is_quarter_start}, {is_year_end}, {is_year_start}, {day_of_week}, " \
-                                        "{week_of_year}, {quarter})" \
+                                        "{week_of_year}, {quarter}, {year}, {month})" \
                                         "on duplicate key update " \
                                         "is_month_end=values(is_month_end), is_month_start=values(is_month_start), is_quarter_end=values(is_quarter_end), " \
                                         "is_quarter_start=values(is_quarter_start), is_year_end=values(is_year_end), is_year_start=values(is_year_start), " \
-                                        "day_of_week=values(day_of_week), week_of_year=values(week_of_year), quarter=values(quarter) "
+                                        "day_of_week=values(day_of_week), week_of_year=values(week_of_year), quarter=values(quarter), " \
+                                        "year=values(year), month=values(month)"
 
     def get_calendar_info(self):
         """
@@ -42,6 +43,7 @@ class CalendarService():
             # 全部交易日数据
             result_list = tt.get_calendar('1970-01-01', '2018-01-01')
             for calendar in result_list:
+                # print(dir(calendar))
                 # 定义临时存储单行数据的字典，用以后续做执行sql的数据填充
                 value_dict = {}
                 try:
@@ -65,6 +67,10 @@ class CalendarService():
                     value_dict['week_of_year'] = calendar.weekofyear
                     # 第几季度，从1开始
                     value_dict['quarter'] = calendar.quarter
+                    # 年度
+                    value_dict['year'] = calendar.year
+                    # 月度
+                    value_dict['month'] = calendar.month
 
                     upsert_sql = self.upsert_calendar_info_sql.format(
                         the_date="'" + value_dict['the_date'] + "'",
@@ -76,7 +82,9 @@ class CalendarService():
                         is_year_start=value_dict['is_year_start'],
                         day_of_week=value_dict['day_of_week'],
                         week_of_year=value_dict['week_of_year'],
-                        quarter=value_dict['quarter']
+                        quarter=value_dict['quarter'],
+                        year=value_dict['year'],
+                        month=value_dict['month']
                     )
                     if len(upsert_sql_list) == 100:
                         self.dbService.insert_many(upsert_sql_list)
