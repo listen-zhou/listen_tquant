@@ -24,17 +24,6 @@ class StockAverageLineService():
                                "from tquant_security_info a " \
                                "where a.security_type = 'STOCK'"
 
-        # 查询交易日表，根据上面sql查询的最大交易日，往前递减ma个交易日，并获取这个交易日
-        self.query_decline_ma_sql = ""
-
-        # 根据递减ma个交易日后的交易日，查询全部日K数据
-        self.query_stock_day_kline_sql = "select the_date, close " \
-                                         "from tquant_stock_day_kline " \
-                                         "where security_code = {security_code} " \
-                                         "and exchange_code = {exchange_code} " \
-                                         "and the_date >= {max_the_date}" \
-                                         "order by the_date asc "
-
         self.upsert = 'insert into tquant_stock_average_line (security_code, the_date, exchange_code, ' \
                  'ma, price) ' \
                  'values ({security_code}, {the_date}, {exchange_code}, ' \
@@ -80,7 +69,7 @@ class StockAverageLineService():
                         continue
                     # 根据average_line_max_the_date已经处理的均线最大交易日，获取递减ma个交易日后的交易日
                     decline_ma_the_date = self.get_calendar_decline_ma_the_date(average_line_max_the_date)
-                    data_add_up = self.processing_single_security_code(security_code, exchange_code, data_add_up, decline_ma_the_date)
+                    data_add_up = self.processing_single_security_code_all(security_code, exchange_code, data_add_up, decline_ma_the_date)
                     # 批量(10)列表的处理进度打印
                     if data_add_up % 10 == 0:
                         if data_add_up % 100 == 0:
@@ -165,16 +154,6 @@ class StockAverageLineService():
         if len(upsert_sql_list) > 0:
             self.dbService.insert_many(upsert_sql_list)
             process_line += '='
-            # # 为了代码复用，增加一个是否增量标识，如果不是增量则更新进度记录，如果是增量则不做操作
-            # if is_increment != True:
-            #     # 更新进度记录
-            #     data_dict = {}
-            #     data_dict['business_type'] = self.business_type
-            #     data_dict['security_code'] = security_code
-            #     data_dict['security_type'] = 'STOCK'
-            #     data_dict['exchange_code'] = exchange_code
-            #     data_dict['process_progress'] = 1
-            #     self.dbService.upsert_tquant_security_process_progress(data_dict)
             if len(day_kline_tuple) == self.ma:
                 processing = 1.0
             else:
@@ -240,7 +219,7 @@ class StockAverageLineService():
             return decline_ma_the_date
         return None
 
-    def processing_single_security_code(self, security_code, exchange_code, data_add_up, decline_ma_the_date):
+    def processing_single_security_code_all(self, security_code, exchange_code, data_add_up, decline_ma_the_date):
         """
         处理单只股票的均线数据
         :param security_code: 股票代码
@@ -256,7 +235,13 @@ class StockAverageLineService():
                   security_code, 'exchange_code:', exchange_code,
                   'decline_ma_the_date:', decline_ma_the_date)
             if decline_ma_the_date != None:
-                day_kline_tuple = self.dbService.query(self.query_stock_day_kline_sql.format(
+                query_stock_day_kline_sql = "select the_date, close " \
+                                            "from tquant_stock_day_kline " \
+                                            "where security_code = {security_code} " \
+                                            "and exchange_code = {exchange_code} " \
+                                            "and the_date >= {max_the_date}" \
+                                            "order by the_date asc "
+                day_kline_tuple = self.dbService.query(query_stock_day_kline_sql.format(
                     security_code="'" + security_code + "'",
                     exchange_code="'" + exchange_code + "'",
                     max_the_date="'" + decline_ma_the_date.strftime('%Y-%m-%d') + "'"

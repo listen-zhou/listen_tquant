@@ -24,19 +24,18 @@ threads.append(stockInfoThread)
 # 处理股票日K数据线程
 dbService2 = DbService()
 # 全量日K数据处理，False
-is_increment = False
-stockDayKlineService = StockDayKlineService(dbService2, is_increment)
+stockDayKlineService = StockDayKlineService(dbService2)
 stockDayKlineThread = threading.Thread(target=stockDayKlineService.processing)
-stockDayKlineThread.setName('stockDayKlineThread-is_increment-' + str(is_increment))
+stockDayKlineThread.setName('stockDayKlineThread')
 threads.append(stockDayKlineThread)
-
+#
 # # 处理证券交易日信息线程
 dbService3 = DbService()
 calendarService = CalendarService(dbService3)
 calendarServiceThread = threading.Thread(target=calendarService.get_calendar_info)
 calendarServiceThread.setName('calendarServiceThread')
 threads.append(calendarServiceThread)
-
+#
 # 处理股票日均线数据，全部股票
 dbService5 = DbService()
 ma = 5
@@ -44,7 +43,7 @@ stockAverageLineService5 = StockAverageLineService(dbService5, ma)
 stockAverageLineServiceThread5 = threading.Thread(target=stockAverageLineService5.processing)
 stockAverageLineServiceThread5.setName('stockAverageLineServiceThread5-ma-' + str(ma))
 threads.append(stockAverageLineServiceThread5)
-
+#
 # 处理股票日均线数据，单只股票
 dbService51 = DbService()
 ma = 5
