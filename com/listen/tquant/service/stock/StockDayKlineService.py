@@ -15,7 +15,6 @@ class StockDayKlineService():
     """
     def __init__(self, dbService):
         self.serviceName = 'StockDayKlineService'
-        self.business_type = 'STOCK_DAY_KLINE'
         self.dbService = dbService
         print(datetime.datetime.now(), self.serviceName, 'init ...', datetime.datetime.now())
         self.query_stock_sql = "select a.security_code, a.exchange_code " \

@@ -4,6 +4,7 @@ import threading
 import datetime
 
 from com.listen.tquant.service.stock.StockAverageLineService import StockAverageLineService
+from com.listen.tquant.service.stock.StockDayKlineFluctuatePercentService import StockDayKlineFluctuatePercentService
 from com.listen.tquant.service.stock.StockInfoService import StockInfoService
 from com.listen.tquant.service.stock.StockDayKlineService import StockDayKlineService
 from com.listen.tquant.service.stock.CalendarService import CalendarService
@@ -53,6 +54,12 @@ stockAverageLineServiceThread51 = threading.Thread(target=stockAverageLineServic
 stockAverageLineServiceThread51.setName('stockAverageLineServiceThread51-ma-' + str(ma))
 threads.append(stockAverageLineServiceThread51)
 
+# 处理股票日K涨跌幅数据
+dbService6 = DbService()
+stockDayKlineFluctuatePercentService = StockDayKlineFluctuatePercentService(dbService6)
+stockDayKlineFluctuatePercentServiceThread = threading.Thread(target=stockDayKlineFluctuatePercentService.processing)
+stockDayKlineFluctuatePercentServiceThread.setName('stockDayKlineFluctuatePercentServiceThread')
+threads.append(stockDayKlineFluctuatePercentServiceThread)
 
 for thread in threads:
     # 设置为守护线程

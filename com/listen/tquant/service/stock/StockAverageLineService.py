@@ -96,7 +96,7 @@ class StockAverageLineService():
         print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'processing thread end ...', datetime.datetime.now())
 
 
-    def process_day_kline_tuple(self, day_kline_tuple, security_code, exchange_code, serviceName, data_add_up):
+    def process_day_kline_tuple(self, day_kline_tuple, security_code, exchange_code, data_add_up):
         # 开始解析股票日K数据, the_date, close
         # 临时存储批量更新sql的列表
         upsert_sql_list = []
@@ -138,7 +138,7 @@ class StockAverageLineService():
                         processing = 1.0
                     else:
                         processing = Decimal(add_up) / Decimal(len(day_kline_tuple) - self.ma) * 100
-                    print(datetime.datetime.now(), serviceName, 'ma', self.ma, 'processing data inner', security_code, 'day_kline_tuple size:',
+                    print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'processing data inner', security_code, 'day_kline_tuple size:',
                           len(day_kline_tuple) - self.ma, 'processing ',
                           process_line,
                           str(processing) + '%')
@@ -158,10 +158,10 @@ class StockAverageLineService():
                 processing = 1.0
             else:
                 processing = Decimal(add_up) / Decimal(len(day_kline_tuple) - self.ma) * 100
-            print(datetime.datetime.now(), serviceName, 'ma', self.ma, 'processing data outer', security_code, 'day_kline_tuple size:',
+            print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'processing data outer', security_code, 'day_kline_tuple size:',
                   len(day_kline_tuple) - self.ma, 'processing ', process_line,
                   str(processing) + '%')
-        print(datetime.datetime.now(), serviceName, 'ma', self.ma, 'processing data ', security_code,
+        print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'processing data ', security_code,
               ' done =============================================')
         # time.sleep(1)
 
@@ -247,8 +247,7 @@ class StockAverageLineService():
                     max_the_date="'" + decline_ma_the_date.strftime('%Y-%m-%d') + "'"
                 ))
                 print('day_kline_tuple:', day_kline_tuple)
-                data_add_up = self.process_day_kline_tuple(day_kline_tuple, security_code, exchange_code,
-                                                           self.serviceName, data_add_up)
+                data_add_up = self.process_day_kline_tuple(day_kline_tuple, security_code, exchange_code, data_add_up)
             else:
                 data_add_up += 1
         except Exception:
