@@ -54,7 +54,9 @@ class DbService(object):
                     try:
                         self.cursor.execute(upsert_sql)
                     except Exception:
+                        print('error sql:', upsert_sql)
                         self.conn.rollback()
+                        traceback.print_exc()
                         return False
                 self.conn.commit()
                 return True

@@ -1,6 +1,9 @@
 # coding: utf-8
 import traceback
-from decimal import *
+import decimal
+from decimal import Decimal
+context = decimal.getcontext()
+context.rounding = decimal.ROUND_05UP
 import types
 
 import numpy
@@ -17,7 +20,6 @@ class StockAverageLineService():
         self.serviceName = 'StockAverageLineService'
         self.ma = ma
         self.dbService = dbService
-        self.business_type = 'STOCK_AVERAGE_' + str(ma) + 'DAY_LINE'
         print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'init ...', datetime.datetime.now())
         # 股票基本信息表关联股票均线数据表，查询已经处理过均线的最新交易日
         self.query_stock_sql = "select a.security_code, a.exchange_code " \
@@ -25,11 +27,18 @@ class StockAverageLineService():
                                "where a.security_type = 'STOCK'"
 
         self.upsert = 'insert into tquant_stock_average_line (security_code, the_date, exchange_code, ' \
-                 'ma, price) ' \
+                 'ma, price, previous_price, fluctuate_percent) ' \
                  'values ({security_code}, {the_date}, {exchange_code}, ' \
-                 '{ma}, {price}) ' \
+                 '{ma}, {price}, {previous_price}, {fluctuate_percent}) ' \
                  'on duplicate key update ' \
-                 'price=values(price)'
+                 'price=values(price), previous_price=values(previous_price), fluctuate_percent=values(fluctuate_percent)'
+
+        self.upsert_none = 'insert into tquant_stock_average_line (security_code, the_date, exchange_code, ' \
+                  'ma, price) ' \
+                  'values ({security_code}, {the_date}, {exchange_code}, ' \
+                  '{ma}, {price}) ' \
+                  'on duplicate key update ' \
+                  'price=values(price) '
 
     def processing(self):
         """
@@ -38,7 +47,6 @@ class StockAverageLineService():
         :return:
         """
         print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'processing start ... {}'.format(datetime.datetime.now()))
-        getcontext().prec = 4
         try:
             # 获取交易日表最大交易日日期，类型为date.datetime
             calendar_max_the_date = self.get_calendar_max_the_date()
@@ -69,12 +77,13 @@ class StockAverageLineService():
                         continue
                     # 根据average_line_max_the_date已经处理的均线最大交易日，获取递减ma个交易日后的交易日
                     decline_ma_the_date = self.get_calendar_decline_ma_the_date(average_line_max_the_date)
-                    data_add_up = self.processing_single_security_code_all(security_code, exchange_code, data_add_up, decline_ma_the_date)
+                    self.processing_single_security_code(security_code, exchange_code, decline_ma_the_date)
+                    data_add_up += 1
                     # 批量(10)列表的处理进度打印
                     if data_add_up % 10 == 0:
                         if data_add_up % 100 == 0:
                             data_process_line += '#'
-                        processing = Decimal(data_add_up) / Decimal(stock_tuple_len) * 100
+                        processing = round(Decimal(data_add_up) / Decimal(stock_tuple_len), 4) * 100
                         print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'processing data inner',
                               'stock_tuple size:', stock_tuple_len, 'processing ',
                               data_process_line,
@@ -85,7 +94,7 @@ class StockAverageLineService():
                 if data_add_up % 10 != 0:
                     if data_add_up % 100 == 0:
                         data_process_line += '#'
-                    processing = Decimal(data_add_up) / Decimal(len(stock_tuple)) * 100
+                    processing = round(Decimal(data_add_up) / Decimal(len(stock_tuple)), 4) * 100
                     print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'processing data outer', 'stock_tuple size:', len(stock_tuple), 'processing ',
                           data_process_line,
                           str(processing) + '%')
@@ -96,7 +105,7 @@ class StockAverageLineService():
         print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'processing thread end ...', datetime.datetime.now())
 
 
-    def process_day_kline_tuple(self, day_kline_tuple, security_code, exchange_code, data_add_up):
+    def process_day_kline_tuple(self, day_kline_tuple, security_code, exchange_code):
         # 开始解析股票日K数据, the_date, close
         # 临时存储批量更新sql的列表
         upsert_sql_list = []
@@ -106,6 +115,12 @@ class StockAverageLineService():
         process_line = ''
         # 循环处理security_code的股票日K数据
         i = 0
+        # 由于是批量提交数据，所以在查询前一日均价时，有可能还未提交，
+        # 所以只在第一次的时候查询，其他的情况用前一次计算的均价作为前一日均价
+        # is_first就是是否第一次需要查询的标识
+        is_first = False
+        # 前一日均价
+        previous_price = None
         while i < len(day_kline_tuple):
             # 根据ma切片, 切片下标索引为i+self.ma
             section_idx = i + self.ma
@@ -117,17 +132,34 @@ class StockAverageLineService():
             # temp_line_tuple中的数据为the_date, close
             if temp_line_tuple and self.ma == len(temp_line_tuple):
                 # 处理数据的交易日为切片的最后一个元素的the_date
-                the_date = (temp_line_tuple[len(temp_line_tuple) - 1][0]).strftime('%Y-%m-%d')
+                the_date = temp_line_tuple[len(temp_line_tuple) - 1][0]
                 temp_items = [item for item in temp_line_tuple[0:]]
                 price_list = [price for price in [item[1] for item in temp_items]]
                 average_price = self.average_price(price_list)
-                upsert_sql = self.upsert.format(
-                    security_code="'"+security_code+"'",
-                    the_date="'" + the_date + "'",
+                if previous_price == None:
+                    previous_price = self.get_previous_price(security_code, exchange_code, the_date)
+                # print('xun huan:', datetime.datetime.now(), self.serviceName, 'ma', self.ma, security_code, exchange_code, the_date,
+                #       previous_price)
+                if previous_price != None and previous_price != Decimal(0):
+                    fluctuate_percent = (average_price - previous_price) / previous_price * 100
+                else:
+                    fluctuate_percent = None
+                if fluctuate_percent == None:
+                    upsert_sql = self.upsert_none.format(security_code="'"+security_code+"'",
+                    the_date="'" + the_date.strftime('%Y-%m-%d') + "'",
                     exchange_code="'" + exchange_code + "'",
                     ma=self.ma,
-                    price=average_price
-                )
+                    price=average_price)
+                else:
+                    upsert_sql = self.upsert.format(
+                        security_code="'"+security_code+"'",
+                        the_date="'" + the_date.strftime('%Y-%m-%d') + "'",
+                        exchange_code="'" + exchange_code + "'",
+                        ma=self.ma,
+                        price=average_price,
+                        previous_price=previous_price,
+                        fluctuate_percent=fluctuate_percent
+                    )
                 # 批量(100)提交数据更新
                 if len(upsert_sql_list) == 3000:
                     self.dbService.insert_many(upsert_sql_list)
@@ -137,7 +169,7 @@ class StockAverageLineService():
                     if len(day_kline_tuple) == self.ma:
                         processing = 1.0
                     else:
-                        processing = Decimal(add_up) / Decimal(len(day_kline_tuple) - self.ma) * 100
+                        processing = round(Decimal(add_up) / Decimal(len(day_kline_tuple) - self.ma), 4) * 100
                     print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'processing data inner', security_code, 'day_kline_tuple size:',
                           len(day_kline_tuple) - self.ma, 'processing ',
                           process_line,
@@ -150,6 +182,8 @@ class StockAverageLineService():
                     # add_up += 1
             i += 1
             add_up += 1
+            # 设置下一个切片的前一日均价为当前切片的均价，以备下一个切片计算涨跌幅使用
+            previous_price = average_price
         # 处理最后一批security_code的更新语句
         if len(upsert_sql_list) > 0:
             self.dbService.insert_many(upsert_sql_list)
@@ -157,7 +191,7 @@ class StockAverageLineService():
             if len(day_kline_tuple) == self.ma:
                 processing = 1.0
             else:
-                processing = Decimal(add_up) / Decimal(len(day_kline_tuple) - self.ma) * 100
+                processing = round(Decimal(add_up) / Decimal(len(day_kline_tuple) - self.ma), 4) * 100
             print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'processing data outer', security_code, 'day_kline_tuple size:',
                   len(day_kline_tuple) - self.ma, 'processing ', process_line,
                   str(processing) + '%')
@@ -165,8 +199,18 @@ class StockAverageLineService():
               ' done =============================================')
         # time.sleep(1)
 
-        data_add_up += 1
-        return data_add_up
+    def get_previous_price(self, security_code, exchange_code, the_date):
+        sql = "select price from tquant_stock_average_line where security_code = {security_code} " \
+              "and exchange_code = {exchange_code} and ma = {ma} and the_date < {the_date} " \
+              "order by the_date desc limit 1".format(security_code="'" + security_code + "'",
+                                                      exchange_code="'" + exchange_code + "'",
+                                                      ma=self.ma,
+                                                      the_date="'" + the_date.strftime('%Y-%m-%d') + "'")
+        previous_price = self.dbService.query(sql)
+        # print('query', datetime.datetime.now(), self.serviceName, 'ma', self.ma, security_code, exchange_code, the_date, previous_price)
+        if previous_price:
+            return previous_price[0][0]
+        return None
 
     def average_price(self, price_list):
         if price_list and len(price_list) == self.ma:
@@ -219,7 +263,7 @@ class StockAverageLineService():
             return decline_ma_the_date
         return None
 
-    def processing_single_security_code_all(self, security_code, exchange_code, data_add_up, decline_ma_the_date):
+    def processing_single_security_code(self, security_code, exchange_code, decline_ma_the_date):
         """
         处理单只股票的均线数据
         :param security_code: 股票代码
@@ -229,9 +273,8 @@ class StockAverageLineService():
         :return: 返回批量处理时传入的进度累加值data_add_up
         """
         try:
-            getcontext().prec = 4
             # print('decline_ma_the_date:', decline_ma_the_date)
-            print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'processing_single_security_code start security_code:',
+            print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'processing_single_security_code 【start】 security_code:',
                   security_code, 'exchange_code:', exchange_code,
                   'decline_ma_the_date:', decline_ma_the_date)
             if decline_ma_the_date != None:
@@ -240,21 +283,23 @@ class StockAverageLineService():
                                             "where security_code = {security_code} " \
                                             "and exchange_code = {exchange_code} " \
                                             "and the_date >= {max_the_date}" \
-                                            "order by the_date asc "
-                day_kline_tuple = self.dbService.query(query_stock_day_kline_sql.format(
-                    security_code="'" + security_code + "'",
-                    exchange_code="'" + exchange_code + "'",
-                    max_the_date="'" + decline_ma_the_date.strftime('%Y-%m-%d') + "'"
-                ))
-                print('day_kline_tuple:', day_kline_tuple)
-                data_add_up = self.process_day_kline_tuple(day_kline_tuple, security_code, exchange_code, data_add_up)
+                                            "order by the_date asc ".format(security_code="'" + security_code + "'",
+                                                                            exchange_code="'" + exchange_code + "'",
+                                                                            max_the_date="'" + decline_ma_the_date.strftime(
+                                                                                '%Y-%m-%d') + "'")
             else:
-                data_add_up += 1
+                query_stock_day_kline_sql = "select the_date, close " \
+                                            "from tquant_stock_day_kline " \
+                                            "where security_code = {security_code} " \
+                                            "and exchange_code = {exchange_code} " \
+                                            "order by the_date asc ".format(security_code="'" + security_code + "'",
+                                                                            exchange_code="'" + exchange_code + "'")
+            day_kline_tuple = self.dbService.query(query_stock_day_kline_sql)
+            print('day_kline_tuple:', day_kline_tuple)
+            self.process_day_kline_tuple(day_kline_tuple, security_code, exchange_code)
         except Exception:
-            data_add_up += 1
             traceback.print_exc()
         print(datetime.datetime.now(), self.serviceName, 'ma', self.ma,
-              'processing_single_security_code end security_code:',
+              'processing_single_security_code 【end】 security_code:',
               security_code, 'exchange_code:', exchange_code,
               'decline_ma_the_date:', decline_ma_the_date)
-        return data_add_up

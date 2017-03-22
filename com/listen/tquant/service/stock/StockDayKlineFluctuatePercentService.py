@@ -35,7 +35,6 @@ class StockDayKlineFluctuatePercentService():
         :return:
         """
         print(datetime.datetime.now(), self.serviceName, 'processing start ... {}'.format(datetime.datetime.now()))
-        getcontext().prec = 4
         try:
             # 需要处理的股票代码
             stock_tuple = self.dbService.query(self.query_stock_sql)
@@ -95,7 +94,6 @@ class StockDayKlineFluctuatePercentService():
         :param data_add_up: 处理进度增量标示
         :return:
         """
-        getcontext().prec = 4
         print(datetime.datetime.now(), self.serviceName,
               'processing_single_security_code_increment 【start】 security_code:',
               security_code, 'exchange_code:', exchange_code,
@@ -127,7 +125,6 @@ class StockDayKlineFluctuatePercentService():
               'processing_single_security_code_all 【start】 security_code:',
               security_code, 'exchange_code:', exchange_code,
               'data_add_up:', data_add_up)
-        getcontext().prec = 4
         day_kline_tuple = self.dbService.query('select the_date, close from tquant_stock_day_kline '
                                                'where security_code = {security_code} '
                                                'and exchange_code = {exchange_code} '
@@ -176,7 +173,6 @@ class StockDayKlineFluctuatePercentService():
         # 需要处理的单只股票进度打印字符
         process_line = ''
         # 循环处理security_code的股票日K数据
-        getcontext().prec = 4
         i = 0
         while i < len(day_kline_tuple):
             # 切片元组，每相连的2个一组
@@ -228,7 +224,6 @@ class StockDayKlineFluctuatePercentService():
         :param exchange_code:
         :return:
         """
-        getcontext().prec = 4
         # 需要处理的涨跌幅的交易日，即第二个元组的the_date
         the_date = temp_kline_tuple[1][0]
         # 前一日收盘价

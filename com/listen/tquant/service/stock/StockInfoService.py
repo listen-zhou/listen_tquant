@@ -29,7 +29,6 @@ class StockInfoService():
         :return:
         """
         print(datetime.datetime.now(), 'StockInfoService get_stock_info start ... {}'.format(datetime.datetime.now()))
-        getcontext().prec = 4
         try:
             # 股票基本信息返回结果为 DataFrame
             stock_list = tt.get_stocklist()

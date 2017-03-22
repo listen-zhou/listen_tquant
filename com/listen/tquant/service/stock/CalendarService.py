@@ -35,7 +35,6 @@ class CalendarService():
         :return:
         """
         print(datetime.datetime.now(), 'CalendarServiceService get_calendar_info start ... {}'.format(datetime.datetime.now()))
-        getcontext().prec = 4
         upsert_sql_list = []
         add_up = 0
         process_line = ''

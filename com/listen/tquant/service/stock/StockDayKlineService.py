@@ -36,7 +36,6 @@ class StockDayKlineService():
         :return:
         """
         print(datetime.datetime.now(), self.serviceName, 'processing start ... {}'.format(datetime.datetime.now()))
-        getcontext().prec = 4
         try:
             # 获取交易日表最大交易日日期，类型为date.datetime
             calendar_max_the_date = self.get_calendar_max_the_date()
@@ -128,7 +127,6 @@ class StockDayKlineService():
         :param data_add_up: 处理进度增量标示
         :return:
         """
-        getcontext().prec = 4
         print(datetime.datetime.now(), self.serviceName,
               'processing_single_security_code_increment 【start】 security_code:',
               security_code, 'exchange_code:', exchange_code,
@@ -160,7 +158,6 @@ class StockDayKlineService():
               'processing_single_security_code_all 【start】 security_code:',
               security_code, 'exchange_code:', exchange_code,
               'data_add_up:', data_add_up)
-        getcontext().prec = 4
         # 注释掉的这行是因为在测试的时候发现返回的数据有问题，
         # 当 security_code == '000505' the_date='2010-01-04' 时，返回的数据为：
         # amount: [ 39478241.  39478241.]vol: [ 5286272.  5286272.]open: [ 7.5  7.5]high: [ 7.65  7.65]low: [ 7.36  7.36]close: [ 7.44  7.44]
@@ -197,7 +194,7 @@ class StockDayKlineService():
             return max_the_date
         return None
 
-    def process_day_kline_df(self, day_kline_df, security_code, exchange_code, serviceName, data_add_up):
+    def process_day_kline_df(self, day_kline_df, security_code, exchange_code, data_add_up):
         # 索引值为日期
         indexes_values = day_kline_df.index.values
         # 临时存储批量更新sql的列表
@@ -207,7 +204,6 @@ class StockDayKlineService():
         # 需要处理的单只股票进度打印字符
         process_line = ''
         # 循环处理security_code的股票日K数据
-        getcontext().prec = 4
         for idx in indexes_values:
             # 解析股票日K数据（每行）
             upsert_sql = self.analysis_columns(day_kline_df, idx, security_code, exchange_code)
@@ -217,12 +213,12 @@ class StockDayKlineService():
                 process_line += '='
                 upsert_sql_list = []
                 upsert_sql_list.append(upsert_sql)
+                add_up += 1
                 processing = Decimal(add_up) / Decimal(len(indexes_values)) * 100
-                print(datetime.datetime.now(), serviceName, 'processing data inner', security_code, 'day_kline_df size:',
+                print(datetime.datetime.now(), self.serviceName, 'processing data inner', security_code, 'day_kline_df size:',
                       len(indexes_values), 'processing ',
                       process_line,
                       str(processing) + '%')
-                add_up += 1
                 # 批量提交数据后当前线程休眠1秒
                 # time.sleep(1)
             else:
@@ -233,10 +229,10 @@ class StockDayKlineService():
             self.dbService.insert_many(upsert_sql_list)
             process_line += '='
             processing = Decimal(add_up) / Decimal(len(indexes_values)) * 100
-            print(datetime.datetime.now(), serviceName, 'processing data outer', security_code, 'day_kline_df size:',
+            print(datetime.datetime.now(), self.serviceName, 'processing data outer', security_code, 'day_kline_df size:',
                   len(indexes_values), 'processing ', process_line,
                   str(processing) + '%')
-        print(datetime.datetime.now(), serviceName, 'processing data ', security_code,
+        print(datetime.datetime.now(), self.serviceName, 'processing data ', security_code,
               ' done =============================================')
         # time.sleep(1)
 
@@ -251,7 +247,6 @@ class StockDayKlineService():
         :param security_code: 证券代码，这里是股票代码
         :return: 返回值为设置完后的upsert_sql，即已经填充了解析后的值
         """
-        getcontext().prec = 4
         value_dict = {}
         value_dict['security_code'] = security_code
         the_date = (str(idx))[0:10]

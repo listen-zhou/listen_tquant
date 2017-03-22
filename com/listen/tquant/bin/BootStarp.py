@@ -11,7 +11,7 @@ from com.listen.tquant.service.stock.CalendarService import CalendarService
 
 
 from com.listen.tquant.dbservice.Service import DbService
-
+from com.listen.tquant.service.stock.StockOtherKlineService import StockOtherKlineService
 
 threads = []
 
@@ -21,10 +21,10 @@ stockInfoService = StockInfoService(dbService1)
 stockInfoThread = threading.Thread(target=stockInfoService.get_stock_info)
 stockInfoThread.setName('stockInfoThread')
 threads.append(stockInfoThread)
-
-# 处理股票日K数据线程
+#
+# # 处理股票日K数据线程
 dbService2 = DbService()
-# 全量日K数据处理，False
+# # 全量日K数据处理，False
 stockDayKlineService = StockDayKlineService(dbService2)
 stockDayKlineThread = threading.Thread(target=stockDayKlineService.processing)
 stockDayKlineThread.setName('stockDayKlineThread')
@@ -44,22 +44,31 @@ stockAverageLineService5 = StockAverageLineService(dbService5, ma)
 stockAverageLineServiceThread5 = threading.Thread(target=stockAverageLineService5.processing)
 stockAverageLineServiceThread5.setName('stockAverageLineServiceThread5-ma-' + str(ma))
 threads.append(stockAverageLineServiceThread5)
-#
+# #
 # 处理股票日均线数据，单只股票
 dbService51 = DbService()
-ma = 5
+ma = 10
 stockAverageLineService51 = StockAverageLineService(dbService51, ma)
-stockAverageLineServiceThread51 = threading.Thread(target=stockAverageLineService51.processing_single_security_code,
-                                                  args=('000001', 'SZ', 0, datetime.date(1970, 1, 1)))
+# stockAverageLineServiceThread51 = threading.Thread(target=stockAverageLineService51.processing_single_security_code,
+#                                                   args=('000001', 'SZ', 0, datetime.date(1970, 1, 1)))
+stockAverageLineServiceThread51 = threading.Thread(target=stockAverageLineService51.processing)
 stockAverageLineServiceThread51.setName('stockAverageLineServiceThread51-ma-' + str(ma))
 threads.append(stockAverageLineServiceThread51)
-
-# 处理股票日K涨跌幅数据
+#
+# # 处理股票日K涨跌幅数据
 dbService6 = DbService()
 stockDayKlineFluctuatePercentService = StockDayKlineFluctuatePercentService(dbService6)
 stockDayKlineFluctuatePercentServiceThread = threading.Thread(target=stockDayKlineFluctuatePercentService.processing)
 stockDayKlineFluctuatePercentServiceThread.setName('stockDayKlineFluctuatePercentServiceThread')
 threads.append(stockDayKlineFluctuatePercentServiceThread)
+
+# 根据股票的日K数据处理生成周K数据
+dbService7 = DbService()
+kline_type = 'month'
+stockOtherKlineService = StockOtherKlineService(dbService7, kline_type)
+stockOtherKlineServiceThread = threading.Thread(target=stockOtherKlineService.processing)
+stockOtherKlineServiceThread.setName('stockOtherKlineServiceThread-' + kline_type)
+threads.append(stockOtherKlineServiceThread)
 
 for thread in threads:
     # 设置为守护线程
