@@ -63,7 +63,7 @@ class StockDayKlineFluctuatePercentService():
                         if data_add_up % 10 == 0:
                             if data_add_up % 100 == 0:
                                 data_process_line += '#'
-                            processing = Decimal(data_add_up) / Decimal(len(stock_tuple)) * 100
+                            processing = round(Decimal(data_add_up) / Decimal(len(stock_tuple)), 4) * 100
                             print(datetime.datetime.now(), self.serviceName, 'processing data inner', 'stock_tuple size:', len(stock_tuple), 'processing ',
                                   data_process_line,
                                   str(processing) + '%')
@@ -75,7 +75,7 @@ class StockDayKlineFluctuatePercentService():
                 if data_add_up % 10 != 0:
                     if data_add_up % 100 == 0:
                         data_process_line += '#'
-                    processing = Decimal(data_add_up) / Decimal(len(stock_tuple)) * 100
+                    processing = round(Decimal(data_add_up) / Decimal(len(stock_tuple)), 4) * 100
                     print(datetime.datetime.now(), self.serviceName, 'processing data outer', 'stock_tuple size:', len(stock_tuple), 'processing ',
                           data_process_line,
                           str(processing) + '%')
@@ -189,7 +189,7 @@ class StockDayKlineFluctuatePercentService():
                 process_line += '='
                 upsert_sql_list = []
                 upsert_sql_list.append(upsert_sql)
-                processing = Decimal(add_up) / Decimal(len(day_kline_tuple)) * 100
+                processing = round(Decimal(add_up) / Decimal(len(day_kline_tuple)), 4) * 100
                 print(datetime.datetime.now(), self.serviceName, 'processing data inner', security_code, 'day_kline_tuple size:',
                       len(day_kline_tuple), 'processing ',
                       process_line,
@@ -205,7 +205,7 @@ class StockDayKlineFluctuatePercentService():
         if len(upsert_sql_list) > 0:
             self.dbService.insert_many(upsert_sql_list)
             process_line += '='
-            processing = Decimal(add_up) / Decimal(len(day_kline_tuple)) * 100
+            processing = round(Decimal(add_up) / Decimal(len(day_kline_tuple)), 4) * 100
             print(datetime.datetime.now(), self.serviceName, 'processing data outer', security_code, 'day_kline_tuple size:',
                   len(day_kline_tuple), 'processing ', process_line,
                   str(processing) + '%')

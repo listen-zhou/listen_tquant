@@ -83,7 +83,7 @@ class StockDayKlineService():
                         if data_add_up % 10 == 0:
                             if data_add_up % 100 == 0:
                                 data_process_line += '#'
-                            processing = Decimal(data_add_up) / Decimal(len(stock_tuple)) * 100
+                            processing = round(Decimal(data_add_up) / Decimal(len(stock_tuple)), 4) * 100
                             print(datetime.datetime.now(), self.serviceName, 'processing data inner', 'stock_tuple size:', len(stock_tuple), 'processing ',
                                   data_process_line,
                                   str(processing) + '%')
@@ -95,7 +95,7 @@ class StockDayKlineService():
                 if data_add_up % 10 != 0:
                     if data_add_up % 100 == 0:
                         data_process_line += '#'
-                    processing = Decimal(data_add_up) / Decimal(len(stock_tuple)) * 100
+                    processing = round(Decimal(data_add_up) / Decimal(len(stock_tuple)), 4) * 100
                     print(datetime.datetime.now(), self.serviceName, 'processing data outer', 'stock_tuple size:', len(stock_tuple), 'processing ',
                           data_process_line,
                           str(processing) + '%')
@@ -214,7 +214,7 @@ class StockDayKlineService():
                 upsert_sql_list = []
                 upsert_sql_list.append(upsert_sql)
                 add_up += 1
-                processing = Decimal(add_up) / Decimal(len(indexes_values)) * 100
+                processing = round(Decimal(add_up) / Decimal(len(indexes_values)), 4) * 100
                 print(datetime.datetime.now(), self.serviceName, 'processing data inner', security_code, 'day_kline_df size:',
                       len(indexes_values), 'processing ',
                       process_line,
@@ -228,7 +228,7 @@ class StockDayKlineService():
         if len(upsert_sql_list) > 0:
             self.dbService.insert_many(upsert_sql_list)
             process_line += '='
-            processing = Decimal(add_up) / Decimal(len(indexes_values)) * 100
+            processing = round(Decimal(add_up) / Decimal(len(indexes_values)), 4) * 100
             print(datetime.datetime.now(), self.serviceName, 'processing data outer', security_code, 'day_kline_df size:',
                   len(indexes_values), 'processing ', process_line,
                   str(processing) + '%')

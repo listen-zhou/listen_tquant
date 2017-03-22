@@ -89,7 +89,7 @@ class CalendarService():
                         self.dbService.insert_many(upsert_sql_list)
                         upsert_sql_list = []
                         process_line += '='
-                        processing = Decimal(add_up) / Decimal(len(result_list)) * 100
+                        processing = round(Decimal(add_up) / Decimal(len(result_list)), 4) * 100
                         upsert_sql_list.append(upsert_sql)
                         print(datetime.datetime.now(), 'CalendarServiceService inner get_calendar_info size:', len(result_list), 'processing ', process_line,
                               str(processing) + '%')
@@ -103,7 +103,7 @@ class CalendarService():
             if len(upsert_sql_list) > 0:
                 self.dbService.insert_many(upsert_sql_list)
                 process_line += '='
-            processing = Decimal(add_up) / Decimal(len(result_list)) * 100
+            processing = round(Decimal(add_up) / Decimal(len(result_list)), 4) * 100
             print(datetime.datetime.now(), 'CalendarServiceService outer get_calendar_info size:', len(result_list), 'processing ', process_line, str(processing) + '%')
             print(datetime.datetime.now(), 'CalendarServiceService =============================================')
         except Exception:

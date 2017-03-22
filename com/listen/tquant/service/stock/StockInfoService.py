@@ -62,7 +62,7 @@ class StockInfoService():
                         self.dbService.insert_many(upsert_sql_list)
                         upsert_sql_list = []
                         process_line += '='
-                        processing = Decimal(add_up) / Decimal(len(indexes_values)) * 100
+                        processing = round(Decimal(add_up) / Decimal(len(indexes_values)), 4) * 100
                         upsert_sql_list.append(upsert_sql)
                         print(datetime.datetime.now(), 'StockInfoService inner get_stock_info size:', len(indexes_values), 'processing ', process_line,
                               str(processing) + '%')
@@ -77,7 +77,7 @@ class StockInfoService():
             if len(upsert_sql_list) > 0:
                 self.dbService.insert_many(upsert_sql_list)
                 process_line += '='
-            processing = Decimal(add_up) / Decimal(len(indexes_values)) * 100
+            processing = round(Decimal(add_up) / Decimal(len(indexes_values)), 4) * 100
             print(datetime.datetime.now(), 'StockInfoService outer get_stock_info size:', len(indexes_values), 'processing ', process_line,
                   str(processing) + '%')
             print(datetime.datetime.now(), 'StockInfoService =============================================')
