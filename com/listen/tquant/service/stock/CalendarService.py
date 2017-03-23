@@ -19,7 +19,6 @@ class CalendarService(BaseService):
     """
     def __init__(self, dbService, logger):
         super(CalendarService, self).__init__(logger)
-        self.serviceName = 'CalendarService'
         self.base_info('{0[0]} ...', [self.get_current_method_name()])
         self.dbService = dbService
         self.upsert_calendar_info_sql = "insert into tquant_calendar_info (the_date, is_month_end, is_month_start, " \
@@ -34,7 +33,7 @@ class CalendarService(BaseService):
                                         "day_of_week=values(day_of_week), week_of_year=values(week_of_year), quarter=values(quarter), " \
                                         "year=values(year), month=values(month)"
 
-    def get_calendar_info(self):
+    def processing(self):
         """
         调用交易日查询接口，返回信息，并解析入库
         :return:
@@ -45,9 +44,9 @@ class CalendarService(BaseService):
         process_line = ''
         try:
             # 全部交易日数据
-            result_list = tt.get_calendar('1970-01-01', '2018-01-01')
-            for calendar in result_list:
-                # print(dir(calendar))
+            result = tt.get_calendar('1970-01-01', '2018-01-01')
+            for calendar in result:
+                add_up += 1
                 # 定义临时存储单行数据的字典，用以后续做执行sql的数据填充
                 value_dict = {}
                 try:
@@ -90,34 +89,28 @@ class CalendarService(BaseService):
                         year=value_dict['year'],
                         month=value_dict['month']
                     )
-                    if len(upsert_sql_list) == 100:
+                    if len(upsert_sql_list) == 1000:
                         self.dbService.insert_many(upsert_sql_list)
                         upsert_sql_list = []
                         process_line += '='
-                        processing = round(Decimal(add_up) / Decimal(len(result_list)), 4) * 100
+                        processing = round(Decimal(add_up) / Decimal(len(result)), 4) * 100
                         upsert_sql_list.append(upsert_sql)
-                        self.base_info('{0[0]} {0[1]} processing {0[2]} {0[3]} {0[4]}%...', [self.get_current_method_name(), 'inner', len(result_list), process_line, round(processing, 4)])
-                        # print(datetime.datetime.now(), 'CalendarServiceService inner get_calendar_info size:', len(result_list), 'processing ', process_line,
-                        #       str(processing) + '%')
-                        add_up += 1
+                        self.base_info('{0[0]} {0[1]} processing {0[2]} {0[3]} {0[4]}%...', [self.get_current_method_name(), 'inner', len(result), process_line, processing])
                         # time.sleep(1)
                     else:
                         upsert_sql_list.append(upsert_sql)
-                        add_up += 1
                 except Exception:
-                    traceback.print_exc()
+                    exc_type, exc_value, exc_traceback = sys.exc_info()
+                    self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',
+                                    [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
             if len(upsert_sql_list) > 0:
                 self.dbService.insert_many(upsert_sql_list)
                 process_line += '='
-            processing = round(Decimal(add_up) / Decimal(len(result_list)), 4) * 100
+            processing = round(Decimal(add_up) / Decimal(len(result)), 4) * 100
             self.base_info('{0[0]} {0[1]} processing {0[2]} {0[3]} {0[4]}%',
-                           [self.get_current_method_name(), 'inner', len(result_list), process_line, round(processing, 4)])
-            # print(datetime.datetime.now(), 'CalendarServiceService outer get_calendar_info size:', len(result_list), 'processing ', process_line, str(processing) + '%')
-            # print(datetime.datetime.now(), 'CalendarServiceService =============================================')
+                           [self.get_current_method_name(), 'inner', len(result), process_line, processing])
 
         except Exception:
-            # traceback.print_exc()
             exc_type, exc_value, exc_traceback = sys.exc_info()
             self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ', [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
         self.base_info('{0[0]} 【end】', [self.get_current_method_name()])
-        # print(datetime.datetime.now(), 'CalendarServiceService get_calendar_info end ... {}'.format(datetime.datetime.now()))

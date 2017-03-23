@@ -2,6 +2,10 @@
 import traceback
 import decimal
 from decimal import Decimal
+import sys
+
+from com.listen.tquant.service.BaseService import BaseService
+
 context = decimal.getcontext()
 context.rounding = decimal.ROUND_05UP
 import types
@@ -12,15 +16,15 @@ import datetime
 import time
 
 
-class StockAverageLineService():
+class StockAverageLineService(BaseService):
     """
     股票均线数据处理服务
     """
-    def __init__(self, dbService, ma):
-        self.serviceName = 'StockAverageLineService'
+    def __init__(self, dbService, ma, logger):
+        super(StockAverageLineService, self).__init__(logger)
         self.ma = ma
         self.dbService = dbService
-        print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'init ...', datetime.datetime.now())
+        self.base_info('{0[0]} ...', [self.get_current_method_name()])
         # 股票基本信息表关联股票均线数据表，查询已经处理过均线的最新交易日
         self.query_stock_sql = "select a.security_code, a.exchange_code " \
                                "from tquant_security_info a " \
@@ -46,66 +50,63 @@ class StockAverageLineService():
         根据已有的股票代码，循环查询单个股票的日K数据
         :return:
         """
-        print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'processing start ... {}'.format(datetime.datetime.now()))
+        self.base_info('{0[0]} 【start】...', [self.get_current_method_name()])
         try:
             # 获取交易日表最大交易日日期，类型为date.datetime
             calendar_max_the_date = self.get_calendar_max_the_date()
-            # print('calendar_max_the_date:', calendar_max_the_date)
             # 需要处理的股票代码，查询股票基本信息表 security_code, exchange_code
-            stock_tuple = self.dbService.query(self.query_stock_sql)
-            print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'processing stock_tuple:', stock_tuple)
-            if stock_tuple:
-                stock_tuple_len = len(stock_tuple)
+            result = self.dbService.query(self.query_stock_sql)
+            if result:
+                stock_tuple_len = len(result)
                 # 需要处理的股票代码进度计数
                 data_add_up = 0
                 # 需要处理的股票代码进度打印字符
                 data_process_line = ''
-                for stock_item in stock_tuple:
+                for stock_item in result:
+                    data_add_up += 1
                     # 股票代码
                     security_code = stock_item[0]
                     exchange_code = stock_item[1]
                     # 根据security_code和exchange_code和ma查询ma均线已经处理的最大交易日
                     average_line_max_the_date = self.get_average_line_max_the_date(security_code, exchange_code)
-                    # print('average_line_max_the_date:', average_line_max_the_date)
                     # 如果均线已经处理的最大交易日和交易日表的最大交易日相等，说明无需处理该均线数据，继续下一个处理
                     if calendar_max_the_date == average_line_max_the_date:
-                        data_add_up += 1
-                        print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'security_code:',
-                              security_code, 'exchange_code:', exchange_code,
-                              'calendar_max_the_date:', calendar_max_the_date,
-                              'average_line_max_the_date:', average_line_max_the_date, 'continue!!!')
+                        self.base_warn('{0[0]} {0[1]} {0[2]} {0[3]} calendar_max_the_date {0[4]} == average_line_max_the_date {0[5]}',
+                                       [self.get_current_method_name(), self.ma, security_code, exchange_code, calendar_max_the_date,
+                                        average_line_max_the_date])
                         continue
                     # 根据average_line_max_the_date已经处理的均线最大交易日，获取递减ma个交易日后的交易日
                     decline_ma_the_date = self.get_calendar_decline_ma_the_date(average_line_max_the_date)
                     self.processing_single_security_code(security_code, exchange_code, decline_ma_the_date)
-                    data_add_up += 1
                     # 批量(10)列表的处理进度打印
                     if data_add_up % 10 == 0:
                         if data_add_up % 100 == 0:
                             data_process_line += '#'
                         processing = round(Decimal(data_add_up) / Decimal(stock_tuple_len), 4) * 100
-                        print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'processing data inner',
-                              'stock_tuple size:', stock_tuple_len, 'processing ',
-                              data_process_line,
-                              str(processing) + '%')
+                        self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]}%...',
+                                       [self.get_current_method_name(), self.ma, 'inner', len(result), data_process_line,
+                                        processing])
                         # time.sleep(1)
 
                 # 最后一批增量列表的处理进度打印
                 if data_add_up % 10 != 0:
                     if data_add_up % 100 == 0:
                         data_process_line += '#'
-                    processing = round(Decimal(data_add_up) / Decimal(len(stock_tuple)), 4) * 100
-                    print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'processing data outer', 'stock_tuple size:', len(stock_tuple), 'processing ',
-                          data_process_line,
-                          str(processing) + '%')
-                    print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'processing data all done ########################################')
+                    processing = round(Decimal(data_add_up) / Decimal(len(result)), 4) * 100
+                    self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]}%',
+                                   [self.get_current_method_name(), self.ma, 'outer', len(result), data_process_line,
+                                    processing])
                     # time.sleep(1)
         except Exception:
-            traceback.print_exc()
-        print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'processing thread end ...', datetime.datetime.now())
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',
+                            [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
+        self.base_info('{0[0]} 【end】', [self.get_current_method_name()])
 
 
-    def process_day_kline_tuple(self, day_kline_tuple, security_code, exchange_code):
+    def process_day_kline_tuple(self, result, security_code, exchange_code):
+        self.base_info('{0[0]} {0[1]} {0[2]}【start】...',
+                       [self.get_current_method_name(), security_code, exchange_code])
         # 开始解析股票日K数据, the_date, close
         # 临时存储批量更新sql的列表
         upsert_sql_list = []
@@ -121,14 +122,14 @@ class StockAverageLineService():
         is_first = False
         # 前一日均价
         previous_price = None
-        while i < len(day_kline_tuple):
+        while i < len(result):
+            add_up += 1
             # 根据ma切片, 切片下标索引为i+self.ma
             section_idx = i + self.ma
             # 如果切片的下标是元祖的最后一个元素，则退出，因为已经处理完毕
-            if section_idx > (len(day_kline_tuple)):
+            if section_idx > (len(result)):
                 break
-            temp_line_tuple = day_kline_tuple[i:(i+self.ma)]
-            # print('temp_line_tuple:', temp_line_tuple)
+            temp_line_tuple = result[i:(i+self.ma)]
             # temp_line_tuple中的数据为the_date, close
             if temp_line_tuple and self.ma == len(temp_line_tuple):
                 # 处理数据的交易日为切片的最后一个元素的the_date
@@ -138,8 +139,6 @@ class StockAverageLineService():
                 average_price = self.average_price(price_list)
                 if previous_price == None:
                     previous_price = self.get_previous_price(security_code, exchange_code, the_date)
-                # print('xun huan:', datetime.datetime.now(), self.serviceName, 'ma', self.ma, security_code, exchange_code, the_date,
-                #       previous_price)
                 if previous_price != None and previous_price != Decimal(0):
                     fluctuate_percent = (average_price - previous_price) / previous_price * 100
                 else:
@@ -166,38 +165,32 @@ class StockAverageLineService():
                     process_line += '='
                     upsert_sql_list = []
                     upsert_sql_list.append(upsert_sql)
-                    if len(day_kline_tuple) == self.ma:
+                    if len(result) == self.ma:
                         processing = 1.0
                     else:
-                        processing = round(Decimal(add_up) / Decimal(len(day_kline_tuple) - self.ma), 4) * 100
-                    print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'processing data inner', security_code, 'day_kline_tuple size:',
-                          len(day_kline_tuple) - self.ma, 'processing ',
-                          process_line,
-                          str(processing) + '%')
-                    # add_up += 1
+                        processing = round(Decimal(add_up) / Decimal(len(result) - self.ma), 4) * 100
+                    self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%...',
+                                   [self.get_current_method_name(), 'inner', len(result), process_line,
+                                    processing])
                     # 批量提交数据后当前线程休眠1秒
                     # time.sleep(1)
                 else:
                     upsert_sql_list.append(upsert_sql)
-                    # add_up += 1
             i += 1
-            add_up += 1
             # 设置下一个切片的前一日均价为当前切片的均价，以备下一个切片计算涨跌幅使用
             previous_price = average_price
         # 处理最后一批security_code的更新语句
         if len(upsert_sql_list) > 0:
             self.dbService.insert_many(upsert_sql_list)
             process_line += '='
-            if len(day_kline_tuple) == self.ma:
+            if len(result) == self.ma:
                 processing = 1.0
             else:
-                processing = round(Decimal(add_up) / Decimal(len(day_kline_tuple) - self.ma), 4) * 100
-            print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'processing data outer', security_code, 'day_kline_tuple size:',
-                  len(day_kline_tuple) - self.ma, 'processing ', process_line,
-                  str(processing) + '%')
-        print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'processing data ', security_code,
-              ' done =============================================')
-        # time.sleep(1)
+                processing = round(Decimal(add_up) / Decimal(len(result) - self.ma), 4) * 100
+            self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
+                           [self.get_current_method_name(), 'outer', len(result), process_line, processing])
+        self.base_info('{0[0]} {0[1]} {0[2]}【end】',
+                       [self.get_current_method_name(), security_code, exchange_code])
 
     def get_previous_price(self, security_code, exchange_code, the_date):
         sql = "select price from tquant_stock_average_line where security_code = {security_code} " \
@@ -207,7 +200,6 @@ class StockAverageLineService():
                                                       ma=self.ma,
                                                       the_date="'" + the_date.strftime('%Y-%m-%d') + "'")
         previous_price = self.dbService.query(sql)
-        # print('query', datetime.datetime.now(), self.serviceName, 'ma', self.ma, security_code, exchange_code, the_date, previous_price)
         if previous_price:
             return previous_price[0][0]
         return None
@@ -228,7 +220,6 @@ class StockAverageLineService():
         """
         sql = "select max(the_date) max_the_date from tquant_calendar_info"
         the_date = self.dbService.query(sql)
-        # print('get_calendar_max_the_date:', the_date)
         if the_date:
             max_the_date = the_date[0][0]
             return max_the_date
@@ -242,7 +233,6 @@ class StockAverageLineService():
         the_date = self.dbService.query(sql.format(security_code="'"+security_code+"'",
                                                    exchange_code="'"+exchange_code+"'",
                                                    ma=self.ma))
-        # print('get_average_line_max_the_date:', the_date)
         if the_date:
             max_the_date = the_date[0][0]
             return max_the_date
@@ -257,7 +247,6 @@ class StockAverageLineService():
             sql = "select min(the_date) from tquant_calendar_info"
         the_date = self.dbService.query(sql.format(average_line_max_the_date="'"+str(average_line_max_the_date)+"'",
                                                    ma=self.ma))
-        # print('get_calendar_decline_ma_the_date:', the_date)
         if the_date != None and the_date != '':
             decline_ma_the_date = the_date[0][0]
             return decline_ma_the_date
@@ -273,10 +262,8 @@ class StockAverageLineService():
         :return: 返回批量处理时传入的进度累加值data_add_up
         """
         try:
-            # print('decline_ma_the_date:', decline_ma_the_date)
-            print(datetime.datetime.now(), self.serviceName, 'ma', self.ma, 'processing_single_security_code 【start】 security_code:',
-                  security_code, 'exchange_code:', exchange_code,
-                  'decline_ma_the_date:', decline_ma_the_date)
+            self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} decline_ma_the_date {0[4]} 【start】...',
+                           [self.get_current_method_name(), self.ma, security_code, exchange_code, decline_ma_the_date])
             if decline_ma_the_date != None:
                 query_stock_day_kline_sql = "select the_date, close " \
                                             "from tquant_stock_day_kline " \
@@ -294,12 +281,11 @@ class StockAverageLineService():
                                             "and exchange_code = {exchange_code} " \
                                             "order by the_date asc ".format(security_code="'" + security_code + "'",
                                                                             exchange_code="'" + exchange_code + "'")
-            day_kline_tuple = self.dbService.query(query_stock_day_kline_sql)
-            print('day_kline_tuple:', day_kline_tuple)
-            self.process_day_kline_tuple(day_kline_tuple, security_code, exchange_code)
+            result = self.dbService.query(query_stock_day_kline_sql)
+            self.process_day_kline_tuple(result, security_code, exchange_code)
         except Exception:
-            traceback.print_exc()
-        print(datetime.datetime.now(), self.serviceName, 'ma', self.ma,
-              'processing_single_security_code 【end】 security_code:',
-              security_code, 'exchange_code:', exchange_code,
-              'decline_ma_the_date:', decline_ma_the_date)
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',
+                            [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
+        self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} decline_ma_the_date {0[4]} 【end】',
+                       [self.get_current_method_name(), self.ma, security_code, exchange_code, decline_ma_the_date])

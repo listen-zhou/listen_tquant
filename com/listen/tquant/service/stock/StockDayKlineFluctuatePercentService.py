@@ -7,16 +7,19 @@ import numpy
 import tquant as tt
 import datetime
 import time
+import sys
+
+from com.listen.tquant.service.BaseService import BaseService
 
 
-class StockDayKlineFluctuatePercentService():
+class StockDayKlineFluctuatePercentService(BaseService):
     """
     股票日K数据涨跌幅处理服务
     """
-    def __init__(self, dbService):
-        self.serviceName = 'StockDayKlineFluctuatePercentService'
+    def __init__(self, dbService, logger):
+        super(StockDayKlineFluctuatePercentService, self).__init__(logger)
         self.dbService = dbService
-        print(datetime.datetime.now(), self.serviceName, 'init ...', datetime.datetime.now())
+        self.base_info('{0[0]} ...', [self.get_current_method_name()])
         self.query_stock_sql = "select a.security_code, a.exchange_code " \
                                "from tquant_security_info a " \
                                "where a.security_type = 'STOCK'"
@@ -34,58 +37,57 @@ class StockDayKlineFluctuatePercentService():
         根据已有的股票代码，循环查询单个股票的日K数据
         :return:
         """
-        print(datetime.datetime.now(), self.serviceName, 'processing start ... {}'.format(datetime.datetime.now()))
+        self.base_info('{0[0]} 【start】...', [self.get_current_method_name()])
         try:
             # 需要处理的股票代码
-            stock_tuple = self.dbService.query(self.query_stock_sql)
-            print(datetime.datetime.now(), self.serviceName, 'processing stock_tuple:', stock_tuple)
-            if stock_tuple:
-                stock_tuple_len = len(stock_tuple)
+            result = self.dbService.query(self.query_stock_sql)
+            if result:
+                stock_tuple_len = len(result)
                 # 需要处理的股票代码进度计数
                 data_add_up = 0
                 # 需要处理的股票代码进度打印字符
                 data_process_line = ''
-                for stock_item in stock_tuple:
+                for stock_item in result:
+                    data_add_up += 1
                     try:
                         # 股票代码
                         security_code = stock_item[0]
                         exchange_code = stock_item[1]
                         # 根据security_code和exchange_code日K已经处理的最大交易日
                         day_kline_max_the_date = self.get_day_kline_max_the_date(security_code, exchange_code)
-                        # print('day_kline_max_the_date', day_kline_max_the_date)
                         if day_kline_max_the_date == None or day_kline_max_the_date == '':
-                            data_add_up = self.processing_single_security_code_all(security_code, exchange_code, data_add_up)
+                            self.processing_single_security_code_all(security_code, exchange_code)
                         else:
                             # 根据day_kline_max_the_date已经处理的均线最大交易日
-                            data_add_up = self.processing_single_security_code_increment(security_code, exchange_code, day_kline_max_the_date, data_add_up)
-
+                            self.processing_single_security_code_increment(security_code, exchange_code, day_kline_max_the_date)
                         # 批量(10)列表的处理进度打印
                         if data_add_up % 10 == 0:
                             if data_add_up % 100 == 0:
                                 data_process_line += '#'
-                            processing = round(Decimal(data_add_up) / Decimal(len(stock_tuple)), 4) * 100
-                            print(datetime.datetime.now(), self.serviceName, 'processing data inner', 'stock_tuple size:', len(stock_tuple), 'processing ',
-                                  data_process_line,
-                                  str(processing) + '%')
+                            processing = round(Decimal(data_add_up) / Decimal(len(result)), 4) * 100
+                            self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%...',
+                                           [self.get_current_method_name(), 'inner', len(result), data_process_line,
+                                            processing])
                             # time.sleep(1)
                     except Exception:
-                        data_add_up += 1
-                        traceback.print_exc()
+                        exc_type, exc_value, exc_traceback = sys.exc_info()
+                        self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',
+                                        [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
                 # 最后一批增量列表的处理进度打印
                 if data_add_up % 10 != 0:
                     if data_add_up % 100 == 0:
                         data_process_line += '#'
-                    processing = round(Decimal(data_add_up) / Decimal(len(stock_tuple)), 4) * 100
-                    print(datetime.datetime.now(), self.serviceName, 'processing data outer', 'stock_tuple size:', len(stock_tuple), 'processing ',
-                          data_process_line,
-                          str(processing) + '%')
-                    print(datetime.datetime.now(), self.serviceName, 'processing data all done ########################################')
-                    # time.sleep(1)
+                    processing = round(Decimal(data_add_up) / Decimal(len(result)), 4) * 100
+                    self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
+                                   [self.get_current_method_name(), 'outer', len(result), data_process_line,
+                                    processing])
         except Exception:
-            traceback.print_exc()
-        print(datetime.datetime.now(), self.serviceName, 'processing thread end ...', datetime.datetime.now())
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',
+                            [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
+        self.base_info('{0[0]} 【end】', [self.get_current_method_name()])
 
-    def processing_single_security_code_increment(self, security_code, exchange_code, day_kline_max_the_date, data_add_up):
+    def processing_single_security_code_increment(self, security_code, exchange_code, day_kline_max_the_date):
         """
         处理增量单只股票的日K涨跌幅数据
         :param security_code: 股票代码
@@ -94,11 +96,9 @@ class StockDayKlineFluctuatePercentService():
         :param data_add_up: 处理进度增量标示
         :return:
         """
-        print(datetime.datetime.now(), self.serviceName,
-              'processing_single_security_code_increment 【start】 security_code:',
-              security_code, 'exchange_code:', exchange_code,
-              'data_add_up:', data_add_up)
-        day_kline_tuple = self.dbService.query('select the_date, close from tquant_stock_day_kline '
+        self.base_info('{0[0]} {0[1]} {0[2]} 【start】...',
+                       [self.get_current_method_name(), security_code, exchange_code])
+        result = self.dbService.query('select the_date, close from tquant_stock_day_kline '
                                                'where security_code = {security_code} '
                                                'and exchange_code = {exchange_code} '
                                                'and the_date >= {max_the_date} '
@@ -106,14 +106,11 @@ class StockDayKlineFluctuatePercentService():
                                                                                exchange_code="'" + exchange_code + "'",
                                                                                max_the_date="'" + day_kline_max_the_date.strftime('%Y-%m-%d') + "'"
                                                                                ))
-        data_add_up = self.process_day_kline_tuple(day_kline_tuple, security_code, exchange_code, data_add_up)
-        print(datetime.datetime.now(), self.serviceName,
-              'processing_single_security_code_increment 【end】 security_code:',
-              security_code, 'exchange_code:', exchange_code,
-              'data_add_up:', data_add_up)
-        return data_add_up
+        self.process_day_kline_tuple(result, security_code, exchange_code)
+        self.base_info('{0[0]} {0[1]} {0[2]} 【end】',
+                       [self.get_current_method_name(), security_code, exchange_code])
 
-    def processing_single_security_code_all(self, security_code, exchange_code, data_add_up):
+    def processing_single_security_code_all(self, security_code, exchange_code):
         """
         处理单只股票的全部日K涨跌幅数据
         :param security_code: 股票代码
@@ -121,21 +118,15 @@ class StockDayKlineFluctuatePercentService():
         :param data_add_up: 处理进度增量标示
         :return:
         """
-        print(datetime.datetime.now(), self.serviceName,
-              'processing_single_security_code_all 【start】 security_code:',
-              security_code, 'exchange_code:', exchange_code,
-              'data_add_up:', data_add_up)
-        day_kline_tuple = self.dbService.query('select the_date, close from tquant_stock_day_kline '
+        self.base_info('{0[0]} {0[1]} {0[2]} 【start】...', [self.get_current_method_name(), security_code, exchange_code])
+        result = self.dbService.query('select the_date, close from tquant_stock_day_kline '
                                                'where security_code = {security_code} '
                                                'and exchange_code = {exchange_code} '
                                                'order by the_date asc '.format(security_code="'" + security_code + "'",
                                                                                exchange_code="'" + exchange_code + "'"))
-        data_add_up = self.process_day_kline_tuple(day_kline_tuple, security_code, exchange_code, data_add_up)
-        print(datetime.datetime.now(), self.serviceName,
-              'processing_single_security_code_all 【end】 security_code:',
-              security_code, 'exchange_code:', exchange_code,
-              'data_add_up:', data_add_up)
-        return data_add_up
+        self.process_day_kline_tuple(result, security_code, exchange_code)
+        self.base_info('{0[0]} {0[1]} {0[2]} 【end】',
+                       [self.get_current_method_name(), security_code, exchange_code])
 
     def get_day_kline_max_the_date(self, security_code, exchange_code):
         """
@@ -151,13 +142,12 @@ class StockDayKlineFluctuatePercentService():
         the_date = self.dbService.query(sql.format(security_code="'"+security_code+"'",
                                                    exchange_code="'"+exchange_code+"'"
                                                    ))
-        # print('get_day_kline_max_the_date:', the_date)
         if the_date:
             max_the_date = the_date[0][0]
             return max_the_date
         return None
 
-    def process_day_kline_tuple(self, day_kline_tuple, security_code, exchange_code, data_add_up):
+    def process_day_kline_tuple(self, day_kline_tuple, security_code, exchange_code):
         """
         处理单只股票涨跌幅数据
         :param day_kline_tuple: 股票日K元组
@@ -166,6 +156,8 @@ class StockDayKlineFluctuatePercentService():
         :param data_add_up: 处理进度增量标识
         :return:
         """
+        self.base_info('{0[0]} {0[1]} {0[2]} 【start】...',
+                       [self.get_current_method_name(), security_code, exchange_code])
         # 临时存储批量更新sql的列表
         upsert_sql_list = []
         # 需要处理的单只股票进度计数
@@ -175,13 +167,12 @@ class StockDayKlineFluctuatePercentService():
         # 循环处理security_code的股票日K数据
         i = 0
         while i < len(day_kline_tuple):
+            add_up += 1
             # 切片元组，每相连的2个一组
             section_idx = i + 2
             if section_idx > len(day_kline_tuple):
-                add_up += 1
                 break
             temp_kline_tuple = day_kline_tuple[i:section_idx]
-            # print(temp_kline_tuple)
             upsert_sql = self.analysis(temp_kline_tuple, security_code, exchange_code)
             # 批量(100)提交数据更新
             if len(upsert_sql_list) == 3000:
@@ -190,31 +181,22 @@ class StockDayKlineFluctuatePercentService():
                 upsert_sql_list = []
                 upsert_sql_list.append(upsert_sql)
                 processing = round(Decimal(add_up) / Decimal(len(day_kline_tuple)), 4) * 100
-                print(datetime.datetime.now(), self.serviceName, 'processing data inner', security_code, 'day_kline_tuple size:',
-                      len(day_kline_tuple), 'processing ',
-                      process_line,
-                      str(processing) + '%')
-                add_up += 1
+                self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%...',
+                               [self.get_current_method_name(), 'inner', len(day_kline_tuple), process_line, processing])
                 # 批量提交数据后当前线程休眠1秒
                 # time.sleep(1)
             else:
                 upsert_sql_list.append(upsert_sql)
-                add_up += 1
             i += 1
         # 处理最后一批security_code的更新语句
         if len(upsert_sql_list) > 0:
             self.dbService.insert_many(upsert_sql_list)
             process_line += '='
             processing = round(Decimal(add_up) / Decimal(len(day_kline_tuple)), 4) * 100
-            print(datetime.datetime.now(), self.serviceName, 'processing data outer', security_code, 'day_kline_tuple size:',
-                  len(day_kline_tuple), 'processing ', process_line,
-                  str(processing) + '%')
-        print(datetime.datetime.now(), self.serviceName, 'processing data ', security_code,
-              ' done =============================================')
-        # time.sleep(1)
-
-        data_add_up += 1
-        return data_add_up
+            self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
+                           [self.get_current_method_name(), 'outer', len(day_kline_tuple), process_line, processing])
+        self.base_info('{0[0]} {0[1]} {0[2]} 【end】',
+                       [self.get_current_method_name(), security_code, exchange_code])
 
     def analysis(self, temp_kline_tuple, security_code, exchange_code):
         """

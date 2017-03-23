@@ -7,15 +7,18 @@ import numpy
 import tquant as tt
 import datetime
 import time
+import sys
+
+from com.listen.tquant.service.BaseService import BaseService
 
 
-class StockInfoService():
+class StockInfoService(BaseService):
     """
     股票基本信息处理服务
     调用tquant全部A股接口，处理返回数据，并入库
     """
-    def __init__(self, dbService):
-        print(datetime.datetime.now(), 'StockInfoService init ... {}'.format(datetime.datetime.now()))
+    def __init__(self, dbService, logger):
+        super(StockInfoService, self).__init__(logger)
         self.dbService = dbService
         self.upsert_stock_info_sql = "insert into tquant_security_info (security_code, security_name, " \
                                     "security_type, exchange_code) " \
@@ -23,12 +26,12 @@ class StockInfoService():
                                     "on duplicate key update " \
                                     "security_name=values(security_name) "
 
-    def get_stock_info(self):
+    def processing(self):
         """
         调用股票查询接口，返回全部A股基本信息，并解析入库
         :return:
         """
-        print(datetime.datetime.now(), 'StockInfoService get_stock_info start ... {}'.format(datetime.datetime.now()))
+        self.base_info('{0[0]} 【start】...', [self.get_current_method_name()])
         try:
             # 股票基本信息返回结果为 DataFrame
             stock_list = tt.get_stocklist()
@@ -43,6 +46,7 @@ class StockInfoService():
             # 数据处理进度打印字符
             process_line = ''
             for idx in indexes_values:
+                add_up += 1
                 # 定义临时存储单行数据的字典，用以后续做执行sql的数据填充
                 value_dict = {}
                 try:
@@ -64,23 +68,26 @@ class StockInfoService():
                         process_line += '='
                         processing = round(Decimal(add_up) / Decimal(len(indexes_values)), 4) * 100
                         upsert_sql_list.append(upsert_sql)
-                        print(datetime.datetime.now(), 'StockInfoService inner get_stock_info size:', len(indexes_values), 'processing ', process_line,
-                              str(processing) + '%')
-                        add_up += 1
+                        self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%...',
+                                       [self.get_current_method_name(), 'inner', len(indexes_values), process_line,
+                                        processing])
                         # time.sleep(1)
                     else:
                         upsert_sql_list.append(upsert_sql)
-                        add_up += 1
                 except Exception:
-                    print(datetime.datetime.now(), 'StockInfoService except exception value_dict:', value_dict)
-                    traceback.print_exc()
+                    exc_type, exc_value, exc_traceback = sys.exc_info()
+                    self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',
+                                    [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
             if len(upsert_sql_list) > 0:
                 self.dbService.insert_many(upsert_sql_list)
                 process_line += '='
             processing = round(Decimal(add_up) / Decimal(len(indexes_values)), 4) * 100
-            print(datetime.datetime.now(), 'StockInfoService outer get_stock_info size:', len(indexes_values), 'processing ', process_line,
-                  str(processing) + '%')
-            print(datetime.datetime.now(), 'StockInfoService =============================================')
+            self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
+                           [self.get_current_method_name(), 'outer', len(indexes_values), process_line,
+                            processing])
+
         except Exception:
-            traceback.print_exc()
-        print(datetime.datetime.now(), 'StockInfoService get_stock_info end ... {}'.format(datetime.datetime.now()))
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',
+                            [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
+        self.base_info('{0[0]} 【end】', [self.get_current_method_name()])

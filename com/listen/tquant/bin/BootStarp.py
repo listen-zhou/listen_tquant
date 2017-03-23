@@ -17,28 +17,28 @@ threads = []
 
 logger = Logger()
 
-# # # 处理股票基本信息线程
+# 处理股票基本信息线程
 # dbService1 = DbService()
-# stockInfoService = StockInfoService(dbService1)
-# stockInfoThread = threading.Thread(target=stockInfoService.get_stock_info)
+# stockInfoService = StockInfoService(dbService1, logger)
+# stockInfoThread = threading.Thread(target=stockInfoService.processing)
 # stockInfoThread.setName('stockInfoThread')
 # threads.append(stockInfoThread)
-# #
-# # # 处理股票日K数据线程
-# dbService2 = DbService()
-# # # 全量日K数据处理，False
-# stockDayKlineService = StockDayKlineService(dbService2)
-# stockDayKlineThread = threading.Thread(target=stockDayKlineService.processing)
-# stockDayKlineThread.setName('stockDayKlineThread')
-# threads.append(stockDayKlineThread)
-# #
-# # # 处理证券交易日信息线程
-dbService3 = DbService()
-calendarService = CalendarService(dbService3, logger)
-calendarServiceThread = threading.Thread(target=calendarService.get_calendar_info)
-calendarServiceThread.setName('calendarServiceThread')
-threads.append(calendarServiceThread)
-# #
+#
+# 处理证券交易日信息线程
+# dbService3 = DbService()
+# calendarService = CalendarService(dbService3, logger)
+# calendarServiceThread = threading.Thread(target=calendarService.processing)
+# calendarServiceThread.setName('calendarServiceThread')
+# threads.append(calendarServiceThread)
+#
+# 处理股票日K数据线程
+dbService2 = DbService()
+# 全量日K数据处理，False
+stockDayKlineService = StockDayKlineService(dbService2, logger)
+stockDayKlineThread = threading.Thread(target=stockDayKlineService.processing)
+stockDayKlineThread.setName('stockDayKlineThread')
+threads.append(stockDayKlineThread)
+#
 # # 处理股票日均线数据，全部股票
 # dbService5 = DbService()
 # ma = 5
@@ -46,7 +46,7 @@ threads.append(calendarServiceThread)
 # stockAverageLineServiceThread5 = threading.Thread(target=stockAverageLineService5.processing)
 # stockAverageLineServiceThread5.setName('stockAverageLineServiceThread5-ma-' + str(ma))
 # threads.append(stockAverageLineServiceThread5)
-# # #
+#
 # # 处理股票日均线数据，单只股票
 # dbService51 = DbService()
 # ma = 10
@@ -56,7 +56,7 @@ threads.append(calendarServiceThread)
 # stockAverageLineServiceThread51 = threading.Thread(target=stockAverageLineService51.processing)
 # stockAverageLineServiceThread51.setName('stockAverageLineServiceThread51-ma-' + str(ma))
 # threads.append(stockAverageLineServiceThread51)
-# #
+#
 # # # 处理股票日K涨跌幅数据
 # dbService6 = DbService()
 # stockDayKlineFluctuatePercentService = StockDayKlineFluctuatePercentService(dbService6)

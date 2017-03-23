@@ -8,17 +8,20 @@ import numpy
 import tquant as tt
 import datetime
 import time
+import sys
+
+from com.listen.tquant.service.BaseService import BaseService
 
 
-class StockOtherKlineService():
+class StockOtherKlineService(BaseService):
     """
     股票日K数据涨跌幅处理服务
     """
-    def __init__(self, dbService, kline_type):
-        self.serviceName = 'StockOtherKlineService'
+    def __init__(self, dbService, kline_type, logger):
+        super(StockOtherKlineService, self).__init__(logger)
+        self.base_info('{0[0]} ...', [self.get_current_method_name()])
         self.dbService = dbService
         self.kline_type = kline_type
-        print(datetime.datetime.now(), self.serviceName, self.kline_type, 'init ...', datetime.datetime.now())
         self.query_stock_sql = "select a.security_code, a.exchange_code " \
                                "from tquant_security_info a " \
                                "where a.security_type = 'STOCK'"
@@ -53,11 +56,10 @@ class StockOtherKlineService():
         根据已有的股票代码，循环查询单个股票的日K数据
         :return:
         """
-        print(datetime.datetime.now(), self.serviceName, self.kline_type, 'processing start ... {}'.format(datetime.datetime.now()))
+        self.base_info('{0[0]} 【start】...', [self.get_current_method_name()])
         try:
             # 需要处理的股票代码
             stock_tuple = self.dbService.query(self.query_stock_sql)
-            print(datetime.datetime.now(), self.serviceName, 'processing stock_tuple:', stock_tuple)
             if stock_tuple:
                 calendar_group = self.get_calendar_group_by_kline_type()
                 print('calendar_group:', calendar_group)
@@ -67,8 +69,8 @@ class StockOtherKlineService():
                 # 需要处理的股票代码进度打印字符
                 data_process_line = ''
                 for stock_item in stock_tuple:
+                    data_add_up += 1
                     try:
-                        data_add_up += 1
                         # 股票代码
                         security_code = stock_item[0]
                         exchange_code = stock_item[1]
@@ -81,26 +83,28 @@ class StockOtherKlineService():
                             if data_add_up % 100 == 0:
                                 data_process_line += '#'
                             processing = round(Decimal(data_add_up) / Decimal(len(stock_tuple)), 4) * 100
-                            print(datetime.datetime.now(), self.serviceName, 'processing data inner', 'stock_tuple size:', len(stock_tuple), 'processing ',
-                                  data_process_line,
-                                  str(processing) + '%')
+                            self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%...',
+                                           [self.get_current_method_name(), 'inner', len(stock_tuple), data_process_line,
+                                            processing])
                             # time.sleep(1)
                     except Exception:
-                        data_add_up += 1
-                        traceback.print_exc()
+                        exc_type, exc_value, exc_traceback = sys.exc_info()
+                        self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',
+                                        [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
                 # 最后一批增量列表的处理进度打印
                 if data_add_up % 10 != 0:
                     if data_add_up % 100 == 0:
                         data_process_line += '#'
                     processing = round(Decimal(data_add_up) / Decimal(len(stock_tuple)), 4) * 100
-                    print(datetime.datetime.now(), self.serviceName, 'processing data outer', 'stock_tuple size:', len(stock_tuple), 'processing ',
-                          data_process_line,
-                          str(processing) + '%')
-                    print(datetime.datetime.now(), self.serviceName, 'processing data 【all done】 ########################################')
+                    self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
+                                   [self.get_current_method_name(), 'outer', len(stock_tuple), data_process_line,
+                                    processing])
                     # time.sleep(1)
         except Exception:
-            traceback.print_exc()
-        print(datetime.datetime.now(), self.serviceName, 'processing thread end ...', datetime.datetime.now())
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',
+                            [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
+            self.base_info('{0[0]} 【end】', [self.get_current_method_name()])
 
     def get_calendar_group_by_kline_type(self):
         if self.kline_type == 'week':
@@ -162,9 +166,8 @@ class StockOtherKlineService():
         :param kline_max_the_date: 已经处理过的K线的最大交易日，有可能为空，即一条也没有处理过
         :return:
         """
-        print(datetime.datetime.now(), self.serviceName,
-              'processing_single_security_code 【start】 security_code:',
-              security_code, 'exchange_code:', exchange_code)
+        self.base_info('{0[0]} {0[1]} {0[2]} 【start】...',
+                       [self.get_current_method_name(), security_code, exchange_code])
         # 前一group收盘价，后面计算涨跌幅要用
         previous_close = None
         upsert_sql_list = []
@@ -184,53 +187,48 @@ class StockOtherKlineService():
             # 所有的判断都做完了就可以真正的开始处理groupK数据了
             # 计算处理该group的K线数据
             # 格式为(the_date, amount, vol, open, high, low, close, fluctuate_percent)
-            one_group_kline = self.get_one_group_kline(group, previous_close, security_code, exchange_code)
-            if one_group_kline:
+            result = self.get_one_group_kline(group, previous_close, security_code, exchange_code)
+            if result:
                 if previous_close == None:
                     upsert_sql = self.upsert_none.format(security_code="'" + security_code + "'",
-                                                          the_date="'" + one_group_kline[0].strftime('%Y-%m-%d') + "'",
+                                                          the_date="'" + result[0].strftime('%Y-%m-%d') + "'",
                                                           exchange_code="'" + exchange_code + "'",
-                                                          amount=one_group_kline[1],
-                                                          vol=one_group_kline[2],
-                                                          open=one_group_kline[3],
-                                                          high=one_group_kline[4],
-                                                          low=one_group_kline[5],
-                                                          close=one_group_kline[6])
+                                                          amount=result[1],
+                                                          vol=result[2],
+                                                          open=result[3],
+                                                          high=result[4],
+                                                          low=result[5],
+                                                          close=result[6])
                 else:
                     upsert_sql = self.upsert.format(security_code="'" + security_code + "'",
-                                                          the_date="'" + one_group_kline[0].strftime('%Y-%m-%d') + "'",
+                                                          the_date="'" + result[0].strftime('%Y-%m-%d') + "'",
                                                           exchange_code="'" + exchange_code + "'",
-                                                          amount=one_group_kline[1],
-                                                          vol=one_group_kline[2],
-                                                          open=one_group_kline[3],
-                                                          high=one_group_kline[4],
-                                                          low=one_group_kline[5],
-                                                          close=one_group_kline[6],
+                                                          amount=result[1],
+                                                          vol=result[2],
+                                                          open=result[3],
+                                                          high=result[4],
+                                                          low=result[5],
+                                                          close=result[6],
                                                           previous_close=previous_close,
-                                                          fluctuate_percent=one_group_kline[7])
+                                                          fluctuate_percent=result[7])
                 # print(upsert_sql)
                 upsert_sql_list.append(upsert_sql)
-                previous_close = one_group_kline[6]
+                previous_close = result[6]
                 if len(upsert_sql_list) % 100 == 0:
                     self.dbService.insert_many(upsert_sql_list)
                     upsert_sql_list = []
                     process_line += '='
                     processing = round(Decimal(add_up) / Decimal(len(calendar_group)), 4) * 100
-                    print(datetime.datetime.now(), self.serviceName, 'processing data inner', security_code, 'calendar_group size:',
-                          len(calendar_group), 'processing ',
-                          process_line,
-                          str(processing) + '%')
+                    self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%...',
+                                   [self.get_current_method_name(), 'inner', len(calendar_group), process_line,
+                                    processing])
         if len(upsert_sql_list) > 0:
             self.dbService.insert_many(upsert_sql_list)
             processing = round(Decimal(add_up) / Decimal(len(calendar_group)), 4) * 100
-            print(datetime.datetime.now(), self.serviceName, 'processing data outer', security_code,
-                  'calendar_group_by_week size:',
-                  len(calendar_group), 'processing ',
-                  process_line,
-                  str(processing) + '%')
-        print(datetime.datetime.now(), self.serviceName,
-              'processing_single_security_code 【end】 security_code:',
-              security_code, 'exchange_code:', exchange_code)
+            self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
+                           [self.get_current_method_name(), 'outer', len(calendar_group), process_line, processing])
+        self.base_info('{0[0]} {0[1]} {0[2]} 【start】...',
+                       [self.get_current_method_name(), security_code, exchange_code])
 
     def get_kline_previous_close(self, group_start_the_date):
         sql = "select close from " + self.kline_table + " where the_date < '" + group_start_the_date.strftime('%Y-%m-%d') + "' order by the_date desc limit 1"
