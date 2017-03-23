@@ -11,8 +11,7 @@ class DbService(object):
         config = configparser.ConfigParser()
         os.chdir('../config')
         file_path = os.getcwd() + '\config.cfg'
-        print(file_path)
-        config.read(file_path)
+        config.read('config.cfg')
         mysql_section = config['mysql']
         if mysql_section:
             host = mysql_section['db.host']
@@ -24,7 +23,7 @@ class DbService(object):
             self.conn = pymysql.connect(host=host, port=port, user=username, passwd=password, db=dbname, charset=charset)
             self.cursor = self.conn.cursor()
         else:
-            raise FileNotFoundError('config.ini mysql section not found!!!')
+            raise FileNotFoundError('config.cfg mysql section not found!!!')
 
     # 数据库连接关闭
     def close(self):
@@ -75,27 +74,3 @@ class DbService(object):
                 return None
         except Exception:
             traceback.print_exc()
-
-    # # 证券数据处理进度表upsert操作
-    # def upsert_tquant_security_process_progress(self, data_dict):
-    #     if data_dict:
-    #         sql = "insert into tquant_security_process_progress (" \
-    #               "business_type, security_code, security_type, exchange_code, process_progress" \
-    #               ") " \
-    #               "values (" \
-    #               "{business_type}, {security_code}, {security_type}, {exchange_code}, {process_progress}" \
-    #               ") " \
-    #               "on duplicate key update " \
-    #               "process_progress=values(process_progress)"
-    #         try:
-    #             sql = sql.format(
-    #                 business_type="'" + data_dict['business_type'] + "'",
-    #                 security_code="'" + data_dict['security_code'] + "'",
-    #                 security_type="'" + data_dict['security_type'] + "'",
-    #                 exchange_code="'" + data_dict['exchange_code'] + "'",
-    #                 process_progress=data_dict['process_progress']
-    #             )
-    #             self.cursor.execute(sql)
-    #         except Exception:
-    #             traceback.print_exc()
-

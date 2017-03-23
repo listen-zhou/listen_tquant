@@ -12,8 +12,10 @@ from com.listen.tquant.service.stock.CalendarService import CalendarService
 
 from com.listen.tquant.dbservice.Service import DbService
 from com.listen.tquant.service.stock.StockOtherKlineService import StockOtherKlineService
-
+from com.listen.tquant.log.Logger import Logger
 threads = []
+
+logger = Logger()
 
 # # # 处理股票基本信息线程
 # dbService1 = DbService()
@@ -31,11 +33,11 @@ threads = []
 # threads.append(stockDayKlineThread)
 # #
 # # # 处理证券交易日信息线程
-# dbService3 = DbService()
-# calendarService = CalendarService(dbService3)
-# calendarServiceThread = threading.Thread(target=calendarService.get_calendar_info)
-# calendarServiceThread.setName('calendarServiceThread')
-# threads.append(calendarServiceThread)
+dbService3 = DbService()
+calendarService = CalendarService(dbService3, logger)
+calendarServiceThread = threading.Thread(target=calendarService.get_calendar_info)
+calendarServiceThread.setName('calendarServiceThread')
+threads.append(calendarServiceThread)
 # #
 # # 处理股票日均线数据，全部股票
 # dbService5 = DbService()
@@ -63,12 +65,12 @@ threads = []
 # threads.append(stockDayKlineFluctuatePercentServiceThread)
 
 # 根据股票的日K数据处理生成周K数据
-dbService7 = DbService()
-kline_type = 'week'
-stockOtherKlineService = StockOtherKlineService(dbService7, kline_type)
-stockOtherKlineServiceThread = threading.Thread(target=stockOtherKlineService.processing)
-stockOtherKlineServiceThread.setName('stockOtherKlineServiceThread-' + kline_type)
-threads.append(stockOtherKlineServiceThread)
+# dbService7 = DbService()
+# kline_type = 'week'
+# stockOtherKlineService = StockOtherKlineService(dbService7, kline_type)
+# stockOtherKlineServiceThread = threading.Thread(target=stockOtherKlineService.processing)
+# stockOtherKlineServiceThread.setName('stockOtherKlineServiceThread-' + kline_type)
+# threads.append(stockOtherKlineServiceThread)
 
 for thread in threads:
     # 设置为守护线程

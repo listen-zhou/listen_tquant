@@ -10,19 +10,16 @@ CREATE TABLE `tquant_calendar_info` (
 	`day_of_week` INT(11) NOT NULL COMMENT '第几天（一周中的），周一是0',
 	`week_of_year` INT(11) NOT NULL COMMENT '第几周（一年中的）',
 	`quarter` INT(11) NOT NULL COMMENT '季度（数字）',
+	`year` INT(11) NOT NULL COMMENT '年度（数字）',
+	`month` INT(11) NOT NULL COMMENT '月度（数字）',
 	`auto_date` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间戳',
 	PRIMARY KEY (`id`),
 	UNIQUE INDEX `the_date` (`the_date`),
-	INDEX `auto_date` (`auto_date`)
+	INDEX `auto_date` (`auto_date`),
+	INDEX `year` (`year`),
+	INDEX `month` (`month`)
 )
-COMMENT='证券交易日表\r\n'
+COMMENT='证券交易日表'
 COLLATE='utf8_general_ci'
 ENGINE=InnoDB
 ;
-
-ALTER TABLE `tquant_calendar_info`
-	ADD COLUMN `year` INT(11) NOT NULL COMMENT '年度（数字）' AFTER `quarter`,
-	ADD COLUMN `month` INT(11) NOT NULL COMMENT '月度（数字）' AFTER `year`;
-ALTER TABLE `tquant_calendar_info`
-	ADD INDEX `year` (`year`),
-	ADD INDEX `month` (`month`);

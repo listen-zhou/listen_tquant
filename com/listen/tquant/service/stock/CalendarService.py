@@ -7,15 +7,20 @@ import numpy
 import tquant as tt
 import datetime
 import time
+import sys
+
+from com.listen.tquant.service.BaseService import BaseService
 
 
-class CalendarService():
+class CalendarService(BaseService):
     """
     交易日信息处理服务
     调用tquant交易日接口，处理返回数据，并入库
     """
-    def __init__(self, dbService):
-        print(datetime.datetime.now(), 'CalendarServiceService init ... {}'.format(datetime.datetime.now()))
+    def __init__(self, dbService, logger):
+        super(CalendarService, self).__init__(logger)
+        self.serviceName = 'CalendarService'
+        self.base_info('{0[0]} ...', [self.get_current_method_name()])
         self.dbService = dbService
         self.upsert_calendar_info_sql = "insert into tquant_calendar_info (the_date, is_month_end, is_month_start, " \
                                         "is_quarter_end, is_quarter_start, is_year_end, is_year_start, day_of_week, " \
@@ -34,7 +39,7 @@ class CalendarService():
         调用交易日查询接口，返回信息，并解析入库
         :return:
         """
-        print(datetime.datetime.now(), 'CalendarServiceService get_calendar_info start ... {}'.format(datetime.datetime.now()))
+        self.base_info('{0[0]} 【start】...', [self.get_current_method_name()])
         upsert_sql_list = []
         add_up = 0
         process_line = ''
@@ -91,8 +96,9 @@ class CalendarService():
                         process_line += '='
                         processing = round(Decimal(add_up) / Decimal(len(result_list)), 4) * 100
                         upsert_sql_list.append(upsert_sql)
-                        print(datetime.datetime.now(), 'CalendarServiceService inner get_calendar_info size:', len(result_list), 'processing ', process_line,
-                              str(processing) + '%')
+                        self.base_info('{0[0]} {0[1]} processing {0[2]} {0[3]} {0[4]}%...', [self.get_current_method_name(), 'inner', len(result_list), process_line, round(processing, 4)])
+                        # print(datetime.datetime.now(), 'CalendarServiceService inner get_calendar_info size:', len(result_list), 'processing ', process_line,
+                        #       str(processing) + '%')
                         add_up += 1
                         # time.sleep(1)
                     else:
@@ -104,8 +110,14 @@ class CalendarService():
                 self.dbService.insert_many(upsert_sql_list)
                 process_line += '='
             processing = round(Decimal(add_up) / Decimal(len(result_list)), 4) * 100
-            print(datetime.datetime.now(), 'CalendarServiceService outer get_calendar_info size:', len(result_list), 'processing ', process_line, str(processing) + '%')
-            print(datetime.datetime.now(), 'CalendarServiceService =============================================')
+            self.base_info('{0[0]} {0[1]} processing {0[2]} {0[3]} {0[4]}%',
+                           [self.get_current_method_name(), 'inner', len(result_list), process_line, round(processing, 4)])
+            # print(datetime.datetime.now(), 'CalendarServiceService outer get_calendar_info size:', len(result_list), 'processing ', process_line, str(processing) + '%')
+            # print(datetime.datetime.now(), 'CalendarServiceService =============================================')
+
         except Exception:
-            traceback.print_exc()
-        print(datetime.datetime.now(), 'CalendarServiceService get_calendar_info end ... {}'.format(datetime.datetime.now()))
+            # traceback.print_exc()
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ', [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
+        self.base_info('{0[0]} 【end】', [self.get_current_method_name()])
+        # print(datetime.datetime.now(), 'CalendarServiceService get_calendar_info end ... {}'.format(datetime.datetime.now()))
