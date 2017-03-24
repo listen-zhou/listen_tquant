@@ -1,11 +1,12 @@
 # coding: utf-8
-import traceback
-from decimal import *
-import types
 
-import numpy
+
+from decimal import *
+import decimal
+context = decimal.getcontext()
+context.rounding = decimal.ROUND_05UP
+
 import tquant as tt
-import datetime
 import time
 import sys
 
@@ -15,7 +16,6 @@ from com.listen.tquant.service.BaseService import BaseService
 class CalendarService(BaseService):
     """
     交易日信息处理服务
-    调用tquant交易日接口，处理返回数据，并入库
     """
     def __init__(self, dbService, logger):
         super(CalendarService, self).__init__(logger)
@@ -45,6 +45,7 @@ class CalendarService(BaseService):
         try:
             # 全部交易日数据
             result = tt.get_calendar('1970-01-01', '2018-01-01')
+            len_result = len(result)
             for calendar in result:
                 add_up += 1
                 # 定义临时存储单行数据的字典，用以后续做执行sql的数据填充
@@ -93,9 +94,10 @@ class CalendarService(BaseService):
                         self.dbService.insert_many(upsert_sql_list)
                         upsert_sql_list = []
                         process_line += '='
-                        processing = round(Decimal(add_up) / Decimal(len(result)), 4) * 100
+                        processing = round(Decimal(add_up) / Decimal(len_result), 4) * 100
                         upsert_sql_list.append(upsert_sql)
-                        self.base_info('{0[0]} {0[1]} processing {0[2]} {0[3]} {0[4]}%...', [self.get_current_method_name(), 'inner', len(result), process_line, processing])
+                        self.base_info('{0[0]} {0[1]} processing {0[2]} {0[3]} {0[4]}%...',
+                                       [self.get_current_method_name(), 'inner', len_result, process_line, processing])
                         # time.sleep(1)
                     else:
                         upsert_sql_list.append(upsert_sql)
@@ -106,11 +108,12 @@ class CalendarService(BaseService):
             if len(upsert_sql_list) > 0:
                 self.dbService.insert_many(upsert_sql_list)
                 process_line += '='
-            processing = round(Decimal(add_up) / Decimal(len(result)), 4) * 100
-            self.base_info('{0[0]} {0[1]} processing {0[2]} {0[3]} {0[4]}%',
-                           [self.get_current_method_name(), 'inner', len(result), process_line, processing])
+            processing = round(Decimal(add_up) / Decimal(len_result), 4) * 100
+            self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
+                           [self.get_current_method_name(), 'outer', len_result, process_line, processing])
 
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ', [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
+            self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',
+                            [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
         self.base_info('{0[0]} 【end】', [self.get_current_method_name()])

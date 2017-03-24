@@ -11,7 +11,22 @@ class Logger():
         logging.config.fileConfig('logger.cfg')
         self.log = logging.getLogger('log')
 
+    def debug(self, message, list):
+        if list:
+            message = message.format(list)
+        self.log.debug(message)
+
     def info(self, message, list):
         if list:
             message = message.format(list)
         self.log.info(message)
+
+    def warn(self, message, list):
+        if list:
+            message = message.format(list)
+        self.log.warn(message)
+
+    def error(self, message, list):
+        if list:
+            message = message.format(list)
+        self.log.error(message)

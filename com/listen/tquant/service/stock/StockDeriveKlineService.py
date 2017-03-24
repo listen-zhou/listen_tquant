@@ -1,74 +1,78 @@
 # coding: utf-8
-import traceback
 from decimal import *
+import decimal
+context = decimal.getcontext()
+context.rounding = decimal.ROUND_05UP
 
-import types
-
-import numpy
-import tquant as tt
-import datetime
 import time
 import sys
 
 from com.listen.tquant.service.BaseService import BaseService
 
 
-class StockOtherKlineService(BaseService):
+class StockDeriveKlineService(BaseService):
     """
-    股票日K数据涨跌幅处理服务
+    股票衍生K线数据处理服务
     """
     def __init__(self, dbService, kline_type, logger):
-        super(StockOtherKlineService, self).__init__(logger)
+        super(StockDeriveKlineService, self).__init__(logger)
         self.base_info('{0[0]} ...', [self.get_current_method_name()])
         self.dbService = dbService
-        self.kline_type = kline_type
+        self.kline_type = kline_type.strip()
         self.query_stock_sql = "select a.security_code, a.exchange_code " \
                                "from tquant_security_info a " \
                                "where a.security_type = 'STOCK'"
-        if kline_type == 'week':
-            self.kline_table = 'tquant_stock_week_kline'
-        elif kline_type == 'month':
-            self.kline_table = 'tquant_stock_month_kline'
-        elif kline_type == 'quarter':
-            self.kline_table = 'tquant_stock_quarter_kline'
-        elif kline_type == 'year':
-            self.kline_table = 'tquant_stock_year_kline'
-        else:
-            self.kline_table = None
-        self.upsert = "insert into " + self.kline_table + " (security_code, the_date, exchange_code, " \
-                         "amount, vol, open, high, low, close, previous_close, fluctuate_percent) " \
-                         "values ({security_code}, {the_date}, {exchange_code}, {amount}, {vol}, {open}, {high}, {low}, {close}, {previous_close}, {fluctuate_percent}) " \
-                         "on duplicate key update " \
-                         "amount=values(amount), vol=values(vol), open=values(open), " \
-                         "high=values(high), low=values(low), close=values(close), " \
-                         "previous_close=values(previous_close), fluctuate_percent=values(fluctuate_percent) "
+        self.upsert = "insert into tquant_stock_derive_kline " \
+                      "(security_code, the_date, exchange_code, kline_type, " \
+                      "open, high, low, " \
+                      "close, previous_close, close_change_percent, " \
+                      "amount, previous_amount, amount_change_percent, " \
+                      "vol, previous_vol, vol_change_percent) " \
+                      "values ({security_code}, {the_date}, {exchange_code}, " \
+                      "{open}, {high}, {low}, " \
+                      "{close}, {previous_close}, {close_change_percent}, " \
+                      "{amount}, {previous_amount}, {amount_change_percent}, " \
+                      "{vol}, {previous_vol}, {vol_change_percent}) " \
+                      "on duplicate key update " \
+                      "open=values(open), high=values(high), low=values(low), " \
+                      "close=values(close), previous_close=values(previous_close), amount_change_percent=values(amount_change_percent), " \
+                      "amount=values(amount), previous_amount=values(previous_amount), amount_change_percent=values(amount_change_percent), " \
+                      "vol=values(vol), previous_vol=values(previous_vol), vol_change_percent=values(vol_change_percent) "
 
-        self.upsert_none = "insert into " + self.kline_table + " (security_code, the_date, exchange_code, " \
-                  "amount, vol, open, high, low, close) " \
-                  "values ({security_code}, {the_date}, {exchange_code}, {amount}, {vol}, {open}, {high}, {low}, {close}) " \
-                  "on duplicate key update " \
-                  "amount=values(amount), vol=values(vol), open=values(open), " \
-                  "high=values(high), low=values(low), close=values(close)"
+        self.upsert_none = "insert into tquant_stock_derive_kline " \
+                      "(security_code, the_date, exchange_code, kline_type, " \
+                      "open, high, low, " \
+                      "close, " \
+                      "amount, " \
+                      "vol)" \
+                      "values ({security_code}, {the_date}, {exchange_code}, " \
+                      "{open}, {high}, {low}, " \
+                      "{close}, " \
+                      "{amount}, " \
+                      "{vol}) " \
+                      "on duplicate key update " \
+                      "open=values(open), high=values(high), low=values(low), " \
+                      "close=values(close), " \
+                      "amount=values(amount), " \
+                      "vol=values(vol) "
 
     def processing(self):
         """
-        查询股票周K数据，处理涨跌幅，并入库
         根据已有的股票代码，循环查询单个股票的日K数据
         :return:
         """
         self.base_info('{0[0]} 【start】...', [self.get_current_method_name()])
         try:
             # 需要处理的股票代码
-            stock_tuple = self.dbService.query(self.query_stock_sql)
-            if stock_tuple:
+            result = self.dbService.query(self.query_stock_sql)
+            if result:
                 calendar_group = self.get_calendar_group_by_kline_type()
-                print('calendar_group:', calendar_group)
-                stock_tuple_len = len(stock_tuple)
+                len_result = len(result)
                 # 需要处理的股票代码进度计数
                 data_add_up = 0
                 # 需要处理的股票代码进度打印字符
-                data_process_line = ''
-                for stock_item in stock_tuple:
+                process_line = ''
+                for stock_item in result:
                     data_add_up += 1
                     try:
                         # 股票代码
@@ -76,15 +80,14 @@ class StockOtherKlineService(BaseService):
                         exchange_code = stock_item[1]
                         # 根据security_code和exchange_code日K已经处理的最大交易日
                         kline_max_the_date = self.get_kline_max_the_date(security_code, exchange_code)
-                        # print('kline_max_the_date', kline_max_the_date)
                         self.processing_single_security_code(security_code, exchange_code, calendar_group, kline_max_the_date)
                         # 批量(10)列表的处理进度打印
                         if data_add_up % 10 == 0:
                             if data_add_up % 100 == 0:
-                                data_process_line += '#'
-                            processing = round(Decimal(data_add_up) / Decimal(len(stock_tuple)), 4) * 100
+                                process_line += '#'
+                            processing = round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
                             self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%...',
-                                           [self.get_current_method_name(), 'inner', len(stock_tuple), data_process_line,
+                                           [self.get_current_method_name(), 'inner', len_result, process_line,
                                             processing])
                             # time.sleep(1)
                     except Exception:
@@ -94,10 +97,10 @@ class StockOtherKlineService(BaseService):
                 # 最后一批增量列表的处理进度打印
                 if data_add_up % 10 != 0:
                     if data_add_up % 100 == 0:
-                        data_process_line += '#'
-                    processing = round(Decimal(data_add_up) / Decimal(len(stock_tuple)), 4) * 100
+                        process_line += '#'
+                    processing = round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
                     self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
-                                   [self.get_current_method_name(), 'outer', len(stock_tuple), data_process_line,
+                                   [self.get_current_method_name(), 'outer', len_result, process_line,
                                     processing])
                     # time.sleep(1)
         except Exception:
@@ -168,8 +171,14 @@ class StockOtherKlineService(BaseService):
         """
         self.base_info('{0[0]} {0[1]} {0[2]} 【start】...',
                        [self.get_current_method_name(), security_code, exchange_code])
+        # is_first就是是否第一次需要查询的标识
+        is_first = True
         # 前一group收盘价，后面计算涨跌幅要用
         previous_close = None
+        previous_amount = None
+        previous_vol = None
+        # 前一日均值
+        previous_data = None
         upsert_sql_list = []
         add_up = 0
         process_line = ''
@@ -181,69 +190,76 @@ class StockOtherKlineService(BaseService):
                 if kline_max_the_date < group[0]:
                     continue
                 # 如果在group内，则需要找到这group的前一group的收盘价
-                elif kline_max_the_date >= group[0] and kline_max_the_date <= group[1]:
-                    previous_close = self.get_kline_previous_close(group[0])
+                elif kline_max_the_date >= group[0] and kline_max_the_date <= group[1] and is_first:
+                    previous_data = self.get_kline_previous_data(group[0])
+                    # 只在第一次做查询，无论查询是否有数据，后面都不再查询
+                    is_first = False
+                    if previous_data != None:
+                        previous_close = previous_data[0][0]
+                        previous_amount = previous_data[0][1]
+                        previous_vol = previous_data[0][2]
                 # else 分支说明往后的数据都需要处理，都可以认为是没有处理过的，所就没有else分支了，在此说明是注释一下
             # 所有的判断都做完了就可以真正的开始处理groupK数据了
             # 计算处理该group的K线数据
-            # 格式为(the_date, amount, vol, open, high, low, close, fluctuate_percent)
-            result = self.get_one_group_kline(group, previous_close, security_code, exchange_code)
+            # result格式为(the_date, open, high, low, close, close_change_percent, amount, amount_change_percent, vol, vol_change_percent)
+            result = self.get_one_group_kline(group, security_code, exchange_code, previous_close, previous_amount, previous_vol)
             if result:
                 if previous_close == None:
-                    upsert_sql = self.upsert_none.format(security_code="'" + security_code + "'",
-                                                          the_date="'" + result[0].strftime('%Y-%m-%d') + "'",
-                                                          exchange_code="'" + exchange_code + "'",
-                                                          amount=result[1],
-                                                          vol=result[2],
-                                                          open=result[3],
-                                                          high=result[4],
-                                                          low=result[5],
-                                                          close=result[6])
+                    upsert_sql = self.upsert_none
                 else:
-                    upsert_sql = self.upsert.format(security_code="'" + security_code + "'",
-                                                          the_date="'" + result[0].strftime('%Y-%m-%d') + "'",
-                                                          exchange_code="'" + exchange_code + "'",
-                                                          amount=result[1],
-                                                          vol=result[2],
-                                                          open=result[3],
-                                                          high=result[4],
-                                                          low=result[5],
-                                                          close=result[6],
-                                                          previous_close=previous_close,
-                                                          fluctuate_percent=result[7])
-                # print(upsert_sql)
+                    upsert_sql = self.upsert
+                upsert_sql = upsert_sql.format(security_code="'" + security_code + "'",
+                                               the_date="'" + result[0].strftime('%Y-%m-%d') + "'",
+                                               exchange_code="'" + exchange_code + "'",
+                                               kline_type=self.kline_type,
+                                               open=result[1],
+                                               high=result[2],
+                                               low=result[3],
+                                               close=result[4],
+                                               previous_close=previous_close,
+                                               close_change_percent=result[5],
+                                               amount=result[6],
+                                               previous_amount=previous_amount,
+                                               amount_change_percent=result[7],
+                                               vol=result[8],
+                                               previous_vol=previous_vol,
+                                               vol_change_percent=result[9]
+                                               )
                 upsert_sql_list.append(upsert_sql)
-                previous_close = result[6]
+                previous_close = result[4]
+                previous_amount = result[6]
+                previous_vol = result[8]
                 if len(upsert_sql_list) % 100 == 0:
                     self.dbService.insert_many(upsert_sql_list)
                     upsert_sql_list = []
                     process_line += '='
                     processing = round(Decimal(add_up) / Decimal(len(calendar_group)), 4) * 100
-                    self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%...',
+                    self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%...',
                                    [self.get_current_method_name(), 'inner', len(calendar_group), process_line,
                                     processing])
         if len(upsert_sql_list) > 0:
             self.dbService.insert_many(upsert_sql_list)
             processing = round(Decimal(add_up) / Decimal(len(calendar_group)), 4) * 100
-            self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
+            self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
                            [self.get_current_method_name(), 'outer', len(calendar_group), process_line, processing])
-        self.base_info('{0[0]} {0[1]} {0[2]} 【start】...',
+        self.base_info('{0[0]} {0[1]} {0[2]} 【end】',
                        [self.get_current_method_name(), security_code, exchange_code])
 
-    def get_kline_previous_close(self, group_start_the_date):
-        sql = "select close from " + self.kline_table + " where the_date < '" + group_start_the_date.strftime('%Y-%m-%d') + "' order by the_date desc limit 1"
-        close = self.dbService.query(sql)
-        if close:
-            return close[0][0]
-        return None
+    def get_kline_previous_data(self, group_start_the_date):
+        sql = "select close, amount, vol from tquant_stock_derive_kline " \
+              "where kline_type = '" + self.kline_type + "' the_date < '" + group_start_the_date.strftime('%Y-%m-%d') + "' order by the_date desc limit 1"
+        previous_data = self.dbService.query(sql)
+        return previous_data
 
-    def get_one_group_kline(self, group, previous_close, security_code, exchange_code):
+    def get_one_group_kline(self, group, security_code, exchange_code, previous_close, previous_amount, previous_vol):
         """
         查询一个group时间内的日K数据，并处理成为一个self.kline_type K的数据
         :param group: 分组的时间，tupe(min_the_date, max_the_date)
-        :param previous_close:前一个K线的收盘价，有可能是None
         :param security_code: 股票代码
         :param exchange_code: 交易所
+        :param previous_close:前一个K线的均价，有可能是None
+        :param previous_amount:前一个K线的交易额，有可能是None
+        :param previous_vol:前一个K线的交易量，有可能是None
         :return:
         """
         day_kline_tuple = self.dbService.query('select the_date, amount, vol, open, high, low, close '
@@ -257,7 +273,7 @@ class StockOtherKlineService(BaseService):
                                                                                    '%Y-%m-%d') + "'",
                                                                                max_the_date="'" + group[1].strftime(
                                                                                    '%Y-%m-%d') + "'"))
-        if day_kline_tuple:
+        if day_kline_tuple != None and len(day_kline_tuple) > 0:
             # 交易日，有可能交易日表group的group末比实际日K的交易日大，所以要以实际的为准
             the_date = day_kline_tuple[len(day_kline_tuple) - 1][0]
             # 周成交金额为周内成交金额之和
@@ -272,10 +288,6 @@ class StockOtherKlineService(BaseService):
             low = day_kline_tuple[0][5]
             # 周收盘价为一周最后一天的收盘价
             close = day_kline_tuple[len(day_kline_tuple) - 1][6]
-            # 周涨跌幅计算
-            fluctuate_percent = None
-            if previous_close != None and previous_close != Decimal(0):
-                fluctuate_percent = (close - previous_close) / previous_close * 100
             for day_kline in day_kline_tuple:
                 amount += day_kline[1]
                 vol += day_kline[2]
@@ -283,7 +295,17 @@ class StockOtherKlineService(BaseService):
                     high = day_kline[4]
                 if low > day_kline[5]:
                     low = day_kline[5]
-            return (the_date, amount, vol, open, high, low, close, fluctuate_percent)
+            # 周涨跌幅计算
+            close_change_percent = None
+            amount_change_percent = None
+            vol_change_percent = None
+            if previous_close != None and previous_close != Decimal(0):
+                close_change_percent = round((close - previous_close) / previous_close, 4) * 100
+            if previous_amount != None and previous_amount != Decimal(0):
+                amount_change_percent = round((amount - previous_amount) / previous_amount) * 100
+            if previous_vol != None and previous_vol != Decimal(0):
+                vol_change_percent = round((vol - previous_vol) / previous_vol) * 100
+            return (the_date, open, high, low, close, close_change_percent, amount, amount_change_percent, vol, vol_change_percent)
         return None
 
     def get_kline_max_the_date(self, security_code, exchange_code):
@@ -296,11 +318,10 @@ class StockOtherKlineService(BaseService):
         sql = "select max(the_date) max_the_date from " + self.kline_table + " " \
               "where security_code = {security_code} " \
               "and exchange_code = {exchange_code} " \
-              "and previous_close is not null and fluctuate_percent is not null "
+              "and previous_close is not null and change_percent is not null "
         the_date = self.dbService.query(sql.format(security_code="'"+security_code+"'",
                                                    exchange_code="'"+exchange_code+"'"
                                                    ))
-        # print('get_kline_max_the_date:', the_date)
         if the_date:
             max_the_date = the_date[0][0]
             return max_the_date

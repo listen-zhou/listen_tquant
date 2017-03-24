@@ -10,8 +10,7 @@ class DbService(object):
         # charset必须设置为utf8，而不能为utf-8
         config = configparser.ConfigParser()
         os.chdir('../config')
-        file_path = os.getcwd() + '\config.cfg'
-        config.read('config.cfg')
+        config.read('database.cfg')
         mysql_section = config['mysql']
         if mysql_section:
             host = mysql_section['db.host']
@@ -23,7 +22,7 @@ class DbService(object):
             self.conn = pymysql.connect(host=host, port=port, user=username, passwd=password, db=dbname, charset=charset)
             self.cursor = self.conn.cursor()
         else:
-            raise FileNotFoundError('config.cfg mysql section not found!!!')
+            raise FileNotFoundError('database.cfg mysql section not found!!!')
 
     # 数据库连接关闭
     def close(self):
