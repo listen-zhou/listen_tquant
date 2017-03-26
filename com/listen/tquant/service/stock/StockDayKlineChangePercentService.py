@@ -16,17 +16,18 @@ class StockDayKlineChangePercentService(BaseService):
     """
     股票日K数据涨跌幅处理服务
     """
-    def __init__(self, dbService, logger):
+    def __init__(self, dbService, logger, sleep_seconds):
         super(StockDayKlineChangePercentService, self).__init__(logger)
         self.dbService = dbService
+        self.sleep_seconds = sleep_seconds
         self.base_info('{0[0]} ...', [self.get_current_method_name()])
-        self.query_stock_sql = "select a.security_code, a.exchange_code " \
-                               "from tquant_security_info a " \
-                               "where a.security_type = 'STOCK'"
+        self.query_stock_sql = "select security_code, exchange_code " \
+                               "from tquant_stock_day_kline " \
+                               "group by security_code, exchange_code"
 
         self.upsert = 'insert into tquant_stock_day_kline (security_code, the_date, exchange_code, ' \
                       'previous_close, close_change_percent, ' \
-                      'previous_amount, amount_change_percent,' \
+                      'previous_amount, amount_change_percent, ' \
                       'previous_vol, vol_change_percent) ' \
                       'values ({security_code}, {the_date}, {exchange_code}, ' \
                       '{previous_close}, {close_change_percent},' \
@@ -35,6 +36,12 @@ class StockDayKlineChangePercentService(BaseService):
                       'previous_close=values(previous_close), close_change_percent=values(close_change_percent), ' \
                       'previous_amount=values(previous_amount), amount_change_percent=values(amount_change_percent), ' \
                       'previous_vol=values(previous_vol), vol_change_percent=values(vol_change_percent)'
+
+    def loop(self):
+        while True:
+            self.processing()
+            time.sleep(self.sleep_seconds)
+            break
 
     def processing(self):
         """
@@ -52,6 +59,7 @@ class StockDayKlineChangePercentService(BaseService):
                 # 需要处理的股票代码进度打印字符
                 data_process_line = ''
                 for stock_item in result:
+                    time.sleep(2)
                     data_add_up += 1
                     try:
                         # 股票代码
@@ -65,13 +73,12 @@ class StockDayKlineChangePercentService(BaseService):
                         if data_add_up % 10 == 0:
                             if data_add_up % 100 == 0:
                                 data_process_line += '#'
-                            processing = round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
+                            processing = self.base_round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
                             self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%...',
                                            [self.get_current_method_name(), 'inner', len_result, data_process_line,
                                             processing])
                             # time.sleep(1)
                     except Exception:
-                        print(sys.exc_info())
                         exc_type, exc_value, exc_traceback = sys.exc_info()
                         self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',
                                         [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
@@ -79,7 +86,7 @@ class StockDayKlineChangePercentService(BaseService):
                 if data_add_up % 10 != 0:
                     if data_add_up % 100 == 0:
                         data_process_line += '#'
-                    processing = round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
+                    processing = self.base_round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
                     self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
                                    [self.get_current_method_name(), 'outer', len_result, data_process_line,
                                     processing])
@@ -107,11 +114,10 @@ class StockDayKlineChangePercentService(BaseService):
             sql += "and the_date >= {max_the_date} "
             max_the_date = day_kline_max_the_date.strftime('%Y-%m-%d')
         sql += "order by the_date asc "
-        sql = sql.format(security_code="'" + security_code + "'",
-                         exchange_code="'" + exchange_code + "'",
-                         max_the_date="'" + str(max_the_date) + "'"
+        sql = sql.format(security_code=self.quotes_surround(security_code),
+                         exchange_code=self.quotes_surround(exchange_code),
+                         max_the_date=self.quotes_surround(str(max_the_date))
                          )
-        print(sql)
         result = self.dbService.query(sql)
         # 临时存储批量更新sql的列表
         upsert_sql_list = []
@@ -137,7 +143,7 @@ class StockDayKlineChangePercentService(BaseService):
                 upsert_sql_list = []
                 if upsert_sql != None:
                     upsert_sql_list.append(upsert_sql)
-                processing = round(Decimal(add_up) / Decimal(len_result), 4) * 100
+                processing = self.base_round(Decimal(add_up) / Decimal(len_result), 4) * 100
                 self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%...',
                                 [self.get_current_method_name(), 'inner', len_result, process_line,
                                  processing])
@@ -151,7 +157,7 @@ class StockDayKlineChangePercentService(BaseService):
         if len(upsert_sql_list) > 0:
             self.dbService.insert_many(upsert_sql_list)
             process_line += '='
-            processing = round(Decimal(add_up) / Decimal(len_result), 4) * 100
+            processing = self.base_round(Decimal(add_up) / Decimal(len_result), 4) * 100
             self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
                             [self.get_current_method_name(), 'outer', len_result, process_line,
                              processing])
@@ -170,8 +176,8 @@ class StockDayKlineChangePercentService(BaseService):
               "where security_code = {security_code} " \
               "and exchange_code = {exchange_code} " \
               "and previous_close is not null and close_change_percent is not null "
-        the_date = self.dbService.query(sql.format(security_code="'"+security_code+"'",
-                                                   exchange_code="'"+exchange_code+"'"
+        the_date = self.dbService.query(sql.format(security_code=self.quotes_surround(security_code),
+                                                   exchange_code=self.quotes_surround(exchange_code)
                                                    ))
         if the_date:
             max_the_date = the_date[0][0]
@@ -204,20 +210,20 @@ class StockDayKlineChangePercentService(BaseService):
         # 涨跌幅(百分比)计算:当日(收盘价-前一日收盘价)/前一日收盘价 * 100
         close_change_percent = None
         if close1 != None and close1 != Decimal(0):
-            close_change_percent = round(((close2 - close1) / close1), 4) * 100
+            close_change_percent = self.base_round(((close2 - close1) / close1), 4) * 100
         amount_change_percent = None
         if amount1 != None and amount1 != Decimal(0):
-            amount_change_percent = round(((amount2 - amount1) / amount1), 4) * 100
+            amount_change_percent = self.base_round(((amount2 - amount1) / amount1), 4) * 100
             vol_change_percent = None
         if vol1 != None and vol1 != Decimal(0):
-            vol_change_percent = round(((vol2 - vol1) / vol1), 4) * 100
+            vol_change_percent = self.base_round(((vol2 - vol1) / vol1), 4) * 100
         if close1 != None and close_change_percent != None \
                 and amount1 != None and amount_change_percent != \
                 None and vol1 != None and vol_change_percent != None:
             upsert_sql = self.upsert.format(
-                                            security_code="'" + security_code + "'",
-                                            the_date="'" + the_date.strftime('%Y-%m-%d') + "'",
-                                            exchange_code="'" + exchange_code + "'",
+                                            security_code=self.quotes_surround(security_code),
+                                            the_date=self.quotes_surround(the_date.strftime('%Y-%m-%d')),
+                                            exchange_code=self.quotes_surround(exchange_code),
                                             previous_close=close1,
                                             close_change_percent=close_change_percent,
                                             previous_amount=amount1,

@@ -16,20 +16,21 @@ class StockAverageLineService(BaseService):
     """
     股票均线数据处理服务
     """
-    def __init__(self, dbService, ma, logger):
+    def __init__(self, dbService, ma, logger, sleep_seconds):
         super(StockAverageLineService, self).__init__(logger)
         self.ma = ma
         self.dbService = dbService
+        self.sleep_seconds = sleep_seconds
         self.base_info('{0[0]} ...', [self.get_current_method_name()])
 
-        self.query_stock_sql = "select a.security_code, a.exchange_code " \
-                               "from tquant_security_info a " \
-                               "where a.security_type = 'STOCK'"
+        self.query_stock_sql = "select security_code, exchange_code " \
+                               "from tquant_stock_day_kline " \
+                               "group by security_code, exchange_code"
 
         self.upsert = 'insert into tquant_stock_average_line (security_code, the_date, exchange_code, ' \
                       'ma, ' \
-                      'close, previous_close, close_change_percent,' \
-                      'amount, previous_amount, amount_change_percent,' \
+                      'close, previous_close, close_change_percent, ' \
+                      'amount, previous_amount, amount_change_percent, ' \
                       'vol, previous_vol, vol_change_percent) ' \
                       'values ({security_code}, {the_date}, {exchange_code}, ' \
                       '{ma}, ' \
@@ -41,13 +42,11 @@ class StockAverageLineService(BaseService):
                       'amount=values(amount), previous_amount=values(previous_amount), amount_change_percent=values(amount_change_percent), ' \
                       'vol=values(vol), previous_vol=values(previous_vol), vol_change_percent=values(vol_change_percent)'
 
-        self.upsert_none = 'insert into tquant_stock_average_line (security_code, the_date, exchange_code, ' \
-                           'ma, close) ' \
-                           'values ({security_code}, {the_date}, {exchange_code}, ' \
-                           '{ma}, ' \
-                           '{close}, {amount}, {vol}) ' \
-                           'on duplicate key update ' \
-                           'close=values(close), amount=values(amount), vol=values(vol) '
+    def loop(self):
+        while True:
+            self.processing()
+            time.sleep(self.sleep_seconds)
+            break
 
     def processing(self):
         """
@@ -67,6 +66,7 @@ class StockAverageLineService(BaseService):
                 # 需要处理的股票代码进度打印字符
                 process_line = ''
                 for stock_item in result:
+                    time.sleep(2)
                     data_add_up += 1
                     # 股票代码
                     security_code = stock_item[0]
@@ -86,7 +86,7 @@ class StockAverageLineService(BaseService):
                     if data_add_up % 10 == 0:
                         if data_add_up % 100 == 0:
                             process_line += '#'
-                        processing = round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
+                        processing = self.base_round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
                         self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]}%...',
                                        [self.get_current_method_name(), self.ma, 'inner', len_result, process_line,
                                         processing])
@@ -96,7 +96,7 @@ class StockAverageLineService(BaseService):
                 if data_add_up % 10 != 0:
                     if data_add_up % 100 == 0:
                         process_line += '#'
-                    processing = round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
+                    processing = self.base_round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
                     self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]}%',
                                    [self.get_current_method_name(), self.ma, 'outer', len_result, process_line,
                                     processing])
@@ -116,12 +116,12 @@ class StockAverageLineService(BaseService):
                        [self.get_current_method_name(), security_code, exchange_code])
 
     def get_previous_data(self, security_code, exchange_code, the_date):
-        sql = "select price, amount, vol from tquant_stock_average_line where security_code = {security_code} " \
+        sql = "select close, amount, vol from tquant_stock_average_line where security_code = {security_code} " \
               "and exchange_code = {exchange_code} and ma = {ma} and the_date < {the_date} " \
-              "order by the_date desc limit 1".format(security_code="'" + security_code + "'",
-                                                      exchange_code="'" + exchange_code + "'",
+              "order by the_date desc limit 1".format(security_code=self.quotes_surround(security_code),
+                                                      exchange_code=self.quotes_surround(exchange_code),
                                                       ma=self.ma,
-                                                      the_date="'" + the_date.strftime('%Y-%m-%d') + "'")
+                                                      the_date=self.quotes_surround(the_date.strftime('%Y-%m-%d')))
         previous_data = self.dbService.query(sql)
         return previous_data
 
@@ -142,8 +142,8 @@ class StockAverageLineService(BaseService):
               "where security_code = {security_code} " \
               "and exchange_code = {exchange_code} " \
               "and ma = {ma}"
-        the_date = self.dbService.query(sql.format(security_code="'"+security_code+"'",
-                                                   exchange_code="'"+exchange_code+"'",
+        the_date = self.dbService.query(sql.format(security_code=self.quotes_surround(security_code),
+                                                   exchange_code=self.quotes_surround(exchange_code),
                                                    ma=self.ma))
         if the_date:
             max_the_date = the_date[0][0]
@@ -157,7 +157,7 @@ class StockAverageLineService(BaseService):
                   "order by the_date desc limit {ma}) a"
         else:
             sql = "select min(the_date) from tquant_calendar_info"
-        the_date = self.dbService.query(sql.format(average_line_max_the_date="'"+str(average_line_max_the_date)+"'",
+        the_date = self.dbService.query(sql.format(average_line_max_the_date=self.quotes_surround(str(average_line_max_the_date)),
                                                    ma=self.ma))
         if the_date != None and the_date != '':
             decline_ma_the_date = the_date[0][0]
@@ -179,49 +179,47 @@ class StockAverageLineService(BaseService):
             sql = "select the_date, close, amount, vol " \
                   "from tquant_stock_day_kline " \
                   "where security_code = {security_code} " \
-                  "and exchange_code = {exchange_code} "
+                  "and exchange_code = {exchange_code} " \
+                  "and close is not null and close > 0 "
             max_the_date = None
             if decline_ma_the_date != None:
                 sql += "and the_date >= {max_the_date} "
                 max_the_date = decline_ma_the_date.strftime('%Y-%m-%d')
             sql += "order by the_date asc "
-            sql = sql.format(security_code="'" + security_code + "'",
-                             exchange_code="'" + exchange_code + "'",
-                             max_the_date="'" + max_the_date + "'")
+            sql = sql.format(security_code=self.quotes_surround(security_code),
+                             exchange_code=self.quotes_surround(exchange_code),
+                             max_the_date=self.quotes_surround(max_the_date))
             result = self.dbService.query(sql)
+            if result != None and len(result) > 0:
+                # 开始解析股票日K数据, the_date, close
+                # 临时存储批量更新sql的列表
+                upsert_sql_list = []
+                # 需要处理的单只股票进度计数
+                add_up = 0
+                # 需要处理的单只股票进度打印字符
+                process_line = ''
+                # 循环处理security_code的股票日K数据
+                i = 0
+                # 由于是批量提交数据，所以在查询前一日均价时，有可能还未提交，
+                # 所以只在第一次的时候查询，其他的情况用前一次计算的均价作为前一日均价
+                # is_first就是是否第一次需要查询的标识
+                is_first = True
 
-            # 开始解析股票日K数据, the_date, close
-            # 临时存储批量更新sql的列表
-            upsert_sql_list = []
-            # 需要处理的单只股票进度计数
-            add_up = 0
-            # 需要处理的单只股票进度打印字符
-            process_line = ''
-            # 循环处理security_code的股票日K数据
-            i = 0
-            # 由于是批量提交数据，所以在查询前一日均价时，有可能还未提交，
-            # 所以只在第一次的时候查询，其他的情况用前一次计算的均价作为前一日均价
-            # is_first就是是否第一次需要查询的标识
-            is_first = True
-
-            previous_close = None
-            previous_amount = None
-            previous_vol = None
-            # 前一日均值
-            previous_data = None
-            len_result = len(result)
-            while i < len_result:
-                add_up += 1
-                # 根据ma切片, 切片下标索引为i+self.ma
-                section_idx = i + self.ma
-                # 如果切片的下标是元祖的最后一个元素，则退出，因为已经处理完毕
-                if section_idx > (len_result):
-                    break
-                temp_line_tuple = result[i:(i + self.ma)]
-                # temp_line_tuple中的数据为the_date, close
-                if temp_line_tuple and self.ma == len(temp_line_tuple):
+                previous_close = None
+                previous_amount = None
+                previous_vol = None
+                # 前一日均值
+                previous_data = None
+                len_result = len(result)
+                while i < len_result:
+                    add_up += 1
+                    # 如果切片的下标是元祖的最后一个元素，则退出，因为已经处理完毕
+                    if (i + self.ma) > len_result:
+                        break
+                    temp_line_tuple = result[i:(i + self.ma)]
+                    # temp_line_tuple中的数据为the_date, close
                     # 处理数据的交易日为切片的最后一个元素的the_date
-                    the_date = temp_line_tuple[len(temp_line_tuple) - 1][0]
+                    the_date = temp_line_tuple[self.ma - 1][0]
                     temp_items = [item for item in temp_line_tuple[0:]]
                     close_list = [close for close in [item[1] for item in temp_items]]
                     amount_list = [amount for amount in [item[2] for item in temp_items]]
@@ -231,31 +229,56 @@ class StockAverageLineService(BaseService):
                     average_vol = self.average(vol_list)
                     if is_first:
                         previous_data = self.get_previous_data(security_code, exchange_code, the_date)
-                        # 第一次查询过后，无论查询是否有数据，都不再查询
+                        # 查询前一交易日的均值数据，无论查询是否有数据，都不再查询，
+                        # 如果有数据，则使用前一交易日的数据，
+                        # 如果没有数据，则会认为是均值数据是第一次载入，会自动初始化，所以后续无需再查询赋值
                         is_first = False
-                        if previous_data != None:
+                        if previous_data != None and len(previous_data) > 0:
                             previous_close = previous_data[0][0]
                             previous_amount = previous_data[0][1]
                             previous_vol = previous_data[0][2]
-                    if previous_close != None and previous_close != Decimal(0):
-                        close_change_percent = round((average_close - previous_close) / previous_close) * 100
+                    # 如果前一交易日均收盘价不为空，则计算当前交易日的均收盘价涨跌幅
+                    if previous_close != None:
+                        # 如果前一交易日的均收盘价不为0，则计算涨跌幅
+                        if previous_close != Decimal(0):
+                            close_change_percent = self.base_round((average_close - previous_close) / previous_close, 4) * 100
+                        # 如果前一交易日的均收盘价为0，则设置涨跌幅为1，即100%
+                        else:
+                            close_change_percent = self.base_round(Decimal(1), 4) * 100
+                    # 如果前一交易日均收盘价为空，则设置前一日均收盘价为当前均收盘价，涨跌幅为0，即0%
                     else:
-                        close_change_percent = None
-                    if previous_amount != None and previous_amount != Decimal(0):
-                        amount_change_percent = round((average_amount - previous_amount) / previous_amount) * 100
+                        previous_close = average_close
+                        close_change_percent = self.base_round(Decimal(0), 4) * 100
+
+                    # 如果前一交易日均交易额不为空，则计算当前交易日的均交易额涨跌幅
+                    if previous_amount != None:
+                        # 如果前一交易日的均交易额不为0，则计算涨跌幅
+                        if previous_amount != Decimal(0):
+                            amount_change_percent = self.base_round((average_amount - previous_amount) / previous_amount, 4) * 100
+                        # 如果前一交易日的均交易额为0，则设置涨跌幅为1，即100%
+                        else:
+                            amount_change_percent = self.base_round(Decimal(1), 4) * 100
+                    # 如果前一交易日均交易额为空，则设置前一日均交易量为当前均交易量，涨跌幅为0，即0%
                     else:
-                        amount_change_percent = None
-                    if previous_vol != None and previous_vol != Decimal(0):
-                        vol_change_percent = round((average_vol - previous_vol) / previous_vol) * 100
+                        previous_amount = average_amount
+                        amount_change_percent = self.base_round(Decimal(0), 4) * 100
+
+                    # 如果前一交易日均交易量不为空，则计算当前交易日的均交易量涨跌幅
+                    if previous_vol != None:
+                        # 如果前一交易日的均交易额不为0，则计算涨跌幅
+                        if previous_vol != Decimal(0):
+                            vol_change_percent = self.base_round((average_vol - previous_vol) / previous_vol, 4) * 100
+                        # 如果前一交易日的均交易量为0，则设置涨跌幅为1，即100%
+                        else:
+                            vol_change_percent = self.base_round(Decimal(1), 4) * 100
+                    # 如果前一交易日均交易量为空，则设置前一日均交易量为当前均交易量，涨跌幅为0，即0%
                     else:
-                        vol_change_percent = None
-                    if close_change_percent == None and amount_change_percent == None and vol_change_percent == None:
-                        upsert_sql = self.upsert_none
-                    else:
-                        upsert_sql = self.upsert
-                    upsert_sql = upsert_sql.format(security_code="'" + security_code + "'",
-                                                   the_date="'" + the_date.strftime('%Y-%m-%d') + "'",
-                                                   exchange_code="'" + exchange_code + "'",
+                        previous_vol = average_vol
+                        vol_change_percent = self.base_round(Decimal(0), 4) * 100
+                    upsert_sql = self.upsert
+                    upsert_sql = upsert_sql.format(security_code=self.quotes_surround(security_code),
+                                                   the_date=self.quotes_surround(the_date.strftime('%Y-%m-%d')),
+                                                   exchange_code=self.quotes_surround(exchange_code),
                                                    ma=self.ma,
                                                    close=average_close,
                                                    previous_close=previous_close,
@@ -276,7 +299,7 @@ class StockAverageLineService(BaseService):
                         if len_result == self.ma:
                             processing = 1.0
                         else:
-                            processing = round(Decimal(add_up) / Decimal(len_result - self.ma), 4) * 100
+                            processing = self.base_round(Decimal(add_up) / Decimal(len_result - self.ma), 4) * 100
                         self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%...',
                                         [self.get_current_method_name(), 'inner', len_result, process_line,
                                          processing])
@@ -284,22 +307,22 @@ class StockAverageLineService(BaseService):
                         # time.sleep(1)
                     else:
                         upsert_sql_list.append(upsert_sql)
-                i += 1
-                # 设置下一个切片的前一日均价为当前切片的均价，以备下一个切片计算涨跌幅使用
-                previous_close = average_close
-                previous_amount = average_amount
-                previous_vol = average_vol
+                    i += 1
+                    # 设置下一个切片的前一日均价为当前切片的均价，以备下一个切片计算涨跌幅使用
+                    previous_close = average_close
+                    previous_amount = average_amount
+                    previous_vol = average_vol
 
-            # 处理最后一批security_code的更新语句
-            if len(upsert_sql_list) > 0:
-                self.dbService.insert_many(upsert_sql_list)
-                process_line += '='
-                if len_result == self.ma:
-                    processing = 1.0
-                else:
-                    processing = round(Decimal(add_up) / Decimal(len_result - self.ma), 4) * 100
-                self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
-                                [self.get_current_method_name(), 'outer', len_result, process_line, processing])
+                # 处理最后一批security_code的更新语句
+                if len(upsert_sql_list) > 0:
+                    self.dbService.insert_many(upsert_sql_list)
+                    process_line += '='
+                    if len_result == self.ma:
+                        processing = 1.0
+                    else:
+                        processing = self.base_round(Decimal(add_up) / Decimal(len_result - self.ma), 4) * 100
+                    self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
+                                    [self.get_current_method_name(), 'outer', len_result, process_line, processing])
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',

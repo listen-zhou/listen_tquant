@@ -17,10 +17,11 @@ class CalendarService(BaseService):
     """
     交易日信息处理服务
     """
-    def __init__(self, dbService, logger):
+    def __init__(self, dbService, logger, sleep_seconds):
         super(CalendarService, self).__init__(logger)
         self.base_info('{0[0]} ...', [self.get_current_method_name()])
         self.dbService = dbService
+        self.sleep_seconds = sleep_seconds
         self.upsert_calendar_info_sql = "insert into tquant_calendar_info (the_date, is_month_end, is_month_start, " \
                                         "is_quarter_end, is_quarter_start, is_year_end, is_year_start, day_of_week, " \
                                         "week_of_year, quarter, year, month) " \
@@ -32,6 +33,11 @@ class CalendarService(BaseService):
                                         "is_quarter_start=values(is_quarter_start), is_year_end=values(is_year_end), is_year_start=values(is_year_start), " \
                                         "day_of_week=values(day_of_week), week_of_year=values(week_of_year), quarter=values(quarter), " \
                                         "year=values(year), month=values(month)"
+
+    def loop(self):
+        while True:
+            self.processing()
+            time.sleep(self.sleep_seconds)
 
     def processing(self):
         """
@@ -77,7 +83,7 @@ class CalendarService(BaseService):
                     value_dict['month'] = calendar.month
 
                     upsert_sql = self.upsert_calendar_info_sql.format(
-                        the_date="'" + value_dict['the_date'] + "'",
+                        the_date=self.quotes_surround(value_dict['the_date']),
                         is_month_end=value_dict['is_month_end'],
                         is_month_start=value_dict['is_month_start'],
                         is_quarter_end=value_dict['is_quarter_end'],
@@ -94,7 +100,7 @@ class CalendarService(BaseService):
                         self.dbService.insert_many(upsert_sql_list)
                         upsert_sql_list = []
                         process_line += '='
-                        processing = round(Decimal(add_up) / Decimal(len_result), 4) * 100
+                        processing = self.base_round(Decimal(add_up) / Decimal(len_result), 4) * 100
                         upsert_sql_list.append(upsert_sql)
                         self.base_info('{0[0]} {0[1]} processing {0[2]} {0[3]} {0[4]}%...',
                                        [self.get_current_method_name(), 'inner', len_result, process_line, processing])
@@ -108,7 +114,7 @@ class CalendarService(BaseService):
             if len(upsert_sql_list) > 0:
                 self.dbService.insert_many(upsert_sql_list)
                 process_line += '='
-            processing = round(Decimal(add_up) / Decimal(len_result), 4) * 100
+            processing = self.base_round(Decimal(add_up) / Decimal(len_result), 4) * 100
             self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
                            [self.get_current_method_name(), 'outer', len_result, process_line, processing])
 

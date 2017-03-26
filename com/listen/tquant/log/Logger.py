@@ -30,3 +30,9 @@ class Logger():
         if list:
             message = message.format(list)
         self.log.error(message)
+
+    def exception(self, message, list):
+        if list:
+            message = message.format(list)
+            self.log.error(message)
+            logging.exception(message)

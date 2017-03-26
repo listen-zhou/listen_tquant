@@ -14,21 +14,23 @@ class StockDeriveKlineService(BaseService):
     """
     股票衍生K线数据处理服务
     """
-    def __init__(self, dbService, kline_type, logger):
+    def __init__(self, dbService, kline_type, logger, sleep_seconds):
         super(StockDeriveKlineService, self).__init__(logger)
         self.base_info('{0[0]} ...', [self.get_current_method_name()])
         self.dbService = dbService
         self.kline_type = kline_type.strip()
-        self.query_stock_sql = "select a.security_code, a.exchange_code " \
-                               "from tquant_security_info a " \
-                               "where a.security_type = 'STOCK'"
+        self.sleep_seconds = sleep_seconds
+        self.query_stock_sql = "select security_code, exchange_code " \
+                               "from tquant_stock_day_kline " \
+                               "group by security_code, exchange_code"
+
         self.upsert = "insert into tquant_stock_derive_kline " \
                       "(security_code, the_date, exchange_code, kline_type, " \
                       "open, high, low, " \
                       "close, previous_close, close_change_percent, " \
                       "amount, previous_amount, amount_change_percent, " \
                       "vol, previous_vol, vol_change_percent) " \
-                      "values ({security_code}, {the_date}, {exchange_code}, " \
+                      "values ({security_code}, {the_date}, {exchange_code}, {kline_type}, " \
                       "{open}, {high}, {low}, " \
                       "{close}, {previous_close}, {close_change_percent}, " \
                       "{amount}, {previous_amount}, {amount_change_percent}, " \
@@ -45,7 +47,7 @@ class StockDeriveKlineService(BaseService):
                       "close, " \
                       "amount, " \
                       "vol)" \
-                      "values ({security_code}, {the_date}, {exchange_code}, " \
+                      "values ({security_code}, {the_date}, {exchange_code}, {kline_type}, " \
                       "{open}, {high}, {low}, " \
                       "{close}, " \
                       "{amount}, " \
@@ -55,6 +57,12 @@ class StockDeriveKlineService(BaseService):
                       "close=values(close), " \
                       "amount=values(amount), " \
                       "vol=values(vol) "
+
+    def loop(self):
+        while True:
+            self.processing()
+            time.sleep(self.sleep_seconds)
+            break
 
     def processing(self):
         """
@@ -73,6 +81,7 @@ class StockDeriveKlineService(BaseService):
                 # 需要处理的股票代码进度打印字符
                 process_line = ''
                 for stock_item in result:
+                    time.sleep(2)
                     data_add_up += 1
                     try:
                         # 股票代码
@@ -85,7 +94,7 @@ class StockDeriveKlineService(BaseService):
                         if data_add_up % 10 == 0:
                             if data_add_up % 100 == 0:
                                 process_line += '#'
-                            processing = round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
+                            processing = self.base_round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
                             self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%...',
                                            [self.get_current_method_name(), 'inner', len_result, process_line,
                                             processing])
@@ -98,7 +107,7 @@ class StockDeriveKlineService(BaseService):
                 if data_add_up % 10 != 0:
                     if data_add_up % 100 == 0:
                         process_line += '#'
-                    processing = round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
+                    processing = self.base_round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
                     self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
                                    [self.get_current_method_name(), 'outer', len_result, process_line,
                                     processing])
@@ -208,10 +217,10 @@ class StockDeriveKlineService(BaseService):
                     upsert_sql = self.upsert_none
                 else:
                     upsert_sql = self.upsert
-                upsert_sql = upsert_sql.format(security_code="'" + security_code + "'",
-                                               the_date="'" + result[0].strftime('%Y-%m-%d') + "'",
-                                               exchange_code="'" + exchange_code + "'",
-                                               kline_type=self.kline_type,
+                upsert_sql = upsert_sql.format(security_code=self.quotes_surround(security_code),
+                                               the_date=self.quotes_surround(result[0].strftime('%Y-%m-%d')),
+                                               exchange_code=self.quotes_surround(exchange_code),
+                                               kline_type=self.quotes_surround(self.kline_type),
                                                open=result[1],
                                                high=result[2],
                                                low=result[3],
@@ -233,13 +242,13 @@ class StockDeriveKlineService(BaseService):
                     self.dbService.insert_many(upsert_sql_list)
                     upsert_sql_list = []
                     process_line += '='
-                    processing = round(Decimal(add_up) / Decimal(len(calendar_group)), 4) * 100
+                    processing = self.base_round(Decimal(add_up) / Decimal(len(calendar_group)), 4) * 100
                     self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%...',
                                    [self.get_current_method_name(), 'inner', len(calendar_group), process_line,
                                     processing])
         if len(upsert_sql_list) > 0:
             self.dbService.insert_many(upsert_sql_list)
-            processing = round(Decimal(add_up) / Decimal(len(calendar_group)), 4) * 100
+            processing = self.base_round(Decimal(add_up) / Decimal(len(calendar_group)), 4) * 100
             self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
                            [self.get_current_method_name(), 'outer', len(calendar_group), process_line, processing])
         self.base_info('{0[0]} {0[1]} {0[2]} 【end】',
@@ -247,7 +256,7 @@ class StockDeriveKlineService(BaseService):
 
     def get_kline_previous_data(self, group_start_the_date):
         sql = "select close, amount, vol from tquant_stock_derive_kline " \
-              "where kline_type = '" + self.kline_type + "' the_date < '" + group_start_the_date.strftime('%Y-%m-%d') + "' order by the_date desc limit 1"
+              "where kline_type = '" + self.kline_type + "' and the_date < '" + group_start_the_date.strftime('%Y-%m-%d') + "' order by the_date desc limit 1"
         previous_data = self.dbService.query(sql)
         return previous_data
 
@@ -267,12 +276,12 @@ class StockDeriveKlineService(BaseService):
                                                'where security_code = {security_code} '
                                                'and exchange_code = {exchange_code} '
                                                'and the_date >= {min_the_date} and the_date <= {max_the_date} '
-                                               'order by the_date asc '.format(security_code="'" + security_code + "'",
-                                                                               exchange_code="'" + exchange_code + "'",
-                                                                               min_the_date="'" + group[0].strftime(
-                                                                                   '%Y-%m-%d') + "'",
-                                                                               max_the_date="'" + group[1].strftime(
-                                                                                   '%Y-%m-%d') + "'"))
+                                               'order by the_date asc '.format(security_code=self.quotes_surround(security_code),
+                                                                               exchange_code=self.quotes_surround(exchange_code),
+                                                                               min_the_date=self.quotes_surround(group[0].strftime(
+                                                                                   '%Y-%m-%d')),
+                                                                               max_the_date=self.quotes_surround(group[1].strftime(
+                                                                                   '%Y-%m-%d'))))
         if day_kline_tuple != None and len(day_kline_tuple) > 0:
             # 交易日，有可能交易日表group的group末比实际日K的交易日大，所以要以实际的为准
             the_date = day_kline_tuple[len(day_kline_tuple) - 1][0]
@@ -299,12 +308,44 @@ class StockDeriveKlineService(BaseService):
             close_change_percent = None
             amount_change_percent = None
             vol_change_percent = None
-            if previous_close != None and previous_close != Decimal(0):
-                close_change_percent = round((close - previous_close) / previous_close, 4) * 100
-            if previous_amount != None and previous_amount != Decimal(0):
-                amount_change_percent = round((amount - previous_amount) / previous_amount) * 100
-            if previous_vol != None and previous_vol != Decimal(0):
-                vol_change_percent = round((vol - previous_vol) / previous_vol) * 100
+            # 如果前一交易日均收盘价不为空，则计算当前交易日的均收盘价涨跌幅
+            if previous_close != None:
+                # 如果前一交易日的均收盘价不为0，则计算涨跌幅
+                if previous_close != Decimal(0):
+                    close_change_percent = self.base_round((close - previous_close) / previous_close, 4) * 100
+                # 如果前一交易日的均收盘价为0，则设置涨跌幅为1，即100%
+                else:
+                    close_change_percent = self.base_round(Decimal(1), 4) * 100
+            # 如果前一交易日均收盘价为空，则设置前一日均收盘价为当前均收盘价，涨跌幅为0，即0%
+            else:
+                previous_close = close
+                close_change_percent = self.base_round(Decimal(0), 4) * 100
+
+            # 如果前一交易日均交易额不为空，则计算当前交易日的均交易额涨跌幅
+            if previous_amount != None:
+                # 如果前一交易日的均交易额不为0，则计算涨跌幅
+                if previous_amount != Decimal(0):
+                    amount_change_percent = self.base_round((amount - previous_amount) / previous_amount, 4) * 100
+                # 如果前一交易日的均交易额为0，则设置涨跌幅为1，即100%
+                else:
+                    amount_change_percent = self.base_round(Decimal(1), 4) * 100
+            # 如果前一交易日均交易额为空，则设置前一日均交易量为当前均交易量，涨跌幅为0，即0%
+            else:
+                previous_amount = amount
+                amount_change_percent = self.base_round(Decimal(0), 4) * 100
+
+            # 如果前一交易日均交易量不为空，则计算当前交易日的均交易量涨跌幅
+            if previous_vol != None:
+                # 如果前一交易日的均交易额不为0，则计算涨跌幅
+                if previous_vol != Decimal(0):
+                    vol_change_percent = self.base_round((vol - previous_vol) / previous_vol, 4) * 100
+                # 如果前一交易日的均交易量为0，则设置涨跌幅为1，即100%
+                else:
+                    vol_change_percent = self.base_round(Decimal(1), 4) * 100
+            # 如果前一交易日均交易量为空，则设置前一日均交易量为当前均交易量，涨跌幅为0，即0%
+            else:
+                previous_vol = vol
+                vol_change_percent = self.base_round(Decimal(0), 4) * 100
             return (the_date, open, high, low, close, close_change_percent, amount, amount_change_percent, vol, vol_change_percent)
         return None
 
@@ -315,12 +356,12 @@ class StockDeriveKlineService(BaseService):
         :param exchange_code: 交易所
         :return:
         """
-        sql = "select max(the_date) max_the_date from " + self.kline_table + " " \
+        sql = "select max(the_date) max_the_date " \
+              "from tquant_stock_derive_kline " \
               "where security_code = {security_code} " \
-              "and exchange_code = {exchange_code} " \
-              "and previous_close is not null and change_percent is not null "
-        the_date = self.dbService.query(sql.format(security_code="'"+security_code+"'",
-                                                   exchange_code="'"+exchange_code+"'"
+              "and exchange_code = {exchange_code}"
+        the_date = self.dbService.query(sql.format(security_code=self.quotes_surround(security_code),
+                                                   exchange_code=self.quotes_surround(exchange_code)
                                                    ))
         if the_date:
             max_the_date = the_date[0][0]

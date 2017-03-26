@@ -15,14 +15,21 @@ class StockInfoService(BaseService):
     """
     股票基本信息处理服务
     """
-    def __init__(self, dbService, logger):
+    def __init__(self, dbService, logger, sleep_seconds):
         super(StockInfoService, self).__init__(logger)
         self.dbService = dbService
+        self.sleep_seconds = sleep_seconds
         self.upsert_stock_info_sql = "insert into tquant_security_info (security_code, security_name, " \
                                     "security_type, exchange_code) " \
-                                    "values ({security_code},{security_name},{security_type},{exchange_code}) " \
+                                    "values ({security_code}, {security_name}, {security_type}, {exchange_code}) " \
                                     "on duplicate key update " \
                                     "security_name=values(security_name) "
+
+    def loop(self):
+        while True:
+            self.processing()
+            time.sleep(self.sleep_seconds)
+            break
 
     def processing(self):
         """
@@ -33,6 +40,8 @@ class StockInfoService(BaseService):
         try:
             # 股票基本信息返回结果为 DataFrame
             stock_list = tt.get_stocklist()
+            self.base_info('{0[0]} {0[1]} {0[2]}',
+                           [self.get_current_method_name(), 'tt.get_stocklist() result ', stock_list])
             if stock_list.empty == False:
                 # 索引对象的值为list
                 indexes_values = stock_list.index.values
@@ -46,6 +55,7 @@ class StockInfoService(BaseService):
                 process_line = ''
                 len_indexes_values = len(indexes_values)
                 for idx in indexes_values:
+                    time.sleep(2)
                     add_up += 1
                     # 定义临时存储单行数据的字典，用以后续做执行sql的数据填充
                     value_dict = {}
@@ -57,16 +67,16 @@ class StockInfoService(BaseService):
                         exchange_code = exchange_code[0:exchange_code.find(idx)].upper()
                         value_dict['exchange_code'] = exchange_code
                         upsert_sql = self.upsert_stock_info_sql.format(
-                            exchange_code="'"+value_dict['exchange_code']+"'",
-                            security_code="'"+value_dict['security_code']+"'",
-                            security_name="'"+value_dict['security_name']+"'",
-                            security_type="'"+value_dict['security_type']+"'"
+                            exchange_code=self.quotes_surround(value_dict['exchange_code']),
+                            security_code=self.quotes_surround(value_dict['security_code']),
+                            security_name=self.quotes_surround(value_dict['security_name']),
+                            security_type=self.quotes_surround(value_dict['security_type'])
                         )
                         if len(upsert_sql_list) == 100:
                             self.dbService.insert_many(upsert_sql_list)
                             upsert_sql_list = []
                             process_line += '='
-                            processing = round(Decimal(add_up) / Decimal(len_indexes_values), 4) * 100
+                            processing = self.base_round(Decimal(add_up) / Decimal(len_indexes_values), 4) * 100
                             upsert_sql_list.append(upsert_sql)
                             self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%...',
                                            [self.get_current_method_name(), 'inner', len_indexes_values, process_line,
@@ -81,7 +91,7 @@ class StockInfoService(BaseService):
                 if len(upsert_sql_list) > 0:
                     self.dbService.insert_many(upsert_sql_list)
                     process_line += '='
-                processing = round(Decimal(add_up) / Decimal(len_indexes_values), 4) * 100
+                processing = self.base_round(Decimal(add_up) / Decimal(len_indexes_values), 4) * 100
                 self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
                                [self.get_current_method_name(), 'outer', len_indexes_values, process_line,
                                 processing])

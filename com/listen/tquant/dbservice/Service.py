@@ -20,6 +20,7 @@ class DbService(object):
             dbname = mysql_section['db.dbname']
             charset = mysql_section['db.charset']
             self.conn = pymysql.connect(host=host, port=port, user=username, passwd=password, db=dbname, charset=charset)
+            self.conn.autocommit(True)
             self.cursor = self.conn.cursor()
         else:
             raise FileNotFoundError('database.cfg mysql section not found!!!')
@@ -42,6 +43,7 @@ class DbService(object):
             else:
                 return False
         except Exception:
+            print('error sql:', upsert_sql)
             traceback.print_exc()
 
     # noinspection SpellCheckingInspection,PyBroadException
@@ -56,7 +58,6 @@ class DbService(object):
                         self.conn.rollback()
                         traceback.print_exc()
                         return False
-                self.conn.commit()
                 return True
             return False
         except Exception:
@@ -72,4 +73,5 @@ class DbService(object):
             else:
                 return None
         except Exception:
+            print('sql error:', query_sql)
             traceback.print_exc()
