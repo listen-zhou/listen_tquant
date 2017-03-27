@@ -74,6 +74,7 @@ class StockDayKlineService(BaseService):
                 security_code = None
                 exchange_code = None
                 for stock_item in tuple_security_codes:
+                    time.sleep(2)
                     try:
                         data_add_up += 1
                         # 股票代码
@@ -161,7 +162,6 @@ class StockDayKlineService(BaseService):
         # 所以为了处理这个不同类型的情况，做了判断和检测测试
         # if security_code == '000505':
         try:
-
             if recent_few_the_date == 0:
                 result = tt.get_all_daybar(security_code, 'bfq')
             else:
