@@ -17,11 +17,12 @@ class CalendarService(BaseService):
     """
     交易日信息处理服务
     """
-    def __init__(self, dbService, logger, sleep_seconds):
+    def __init__(self, dbService, logger, sleep_seconds, one_time):
         super(CalendarService, self).__init__(logger)
         self.base_info('{0[0]} ...', [self.get_current_method_name()])
         self.dbService = dbService
         self.sleep_seconds = sleep_seconds
+        self.one_time = one_time
         self.upsert_calendar_info_sql = "insert into tquant_calendar_info (the_date, is_month_end, is_month_start, " \
                                         "is_quarter_end, is_quarter_start, is_year_end, is_year_start, day_of_week, " \
                                         "week_of_year, quarter, year, month) " \
@@ -37,6 +38,8 @@ class CalendarService(BaseService):
     def loop(self):
         while True:
             self.processing()
+            if self.one_time:
+                break
             time.sleep(self.sleep_seconds)
 
     def processing(self):
@@ -52,6 +55,8 @@ class CalendarService(BaseService):
             # 全部交易日数据
             result = tt.get_calendar('1970-01-01', '2018-01-01')
             len_result = len(result)
+            self.base_info('{0[0]} {0[1]} {0[2]}',
+                           [self.get_current_method_name(), 'tt.get_calendar() result size ', len_result])
             for calendar in result:
                 add_up += 1
                 # 定义临时存储单行数据的字典，用以后续做执行sql的数据填充
@@ -96,7 +101,7 @@ class CalendarService(BaseService):
                         year=value_dict['year'],
                         month=value_dict['month']
                     )
-                    if len(upsert_sql_list) == 1000:
+                    if len(upsert_sql_list) == 100:
                         self.dbService.insert_many(upsert_sql_list)
                         upsert_sql_list = []
                         process_line += '='
@@ -104,7 +109,6 @@ class CalendarService(BaseService):
                         upsert_sql_list.append(upsert_sql)
                         self.base_info('{0[0]} {0[1]} processing {0[2]} {0[3]} {0[4]}%...',
                                        [self.get_current_method_name(), 'inner', len_result, process_line, processing])
-                        # time.sleep(1)
                     else:
                         upsert_sql_list.append(upsert_sql)
                 except Exception:

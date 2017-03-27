@@ -14,12 +14,13 @@ class StockDeriveKlineService(BaseService):
     """
     股票衍生K线数据处理服务
     """
-    def __init__(self, dbService, kline_type, logger, sleep_seconds):
+    def __init__(self, dbService, kline_type, logger, sleep_seconds, one_time):
         super(StockDeriveKlineService, self).__init__(logger)
         self.base_info('{0[0]} ...', [self.get_current_method_name()])
         self.dbService = dbService
         self.kline_type = kline_type.strip()
         self.sleep_seconds = sleep_seconds
+        self.one_time = one_time
         self.query_stock_sql = "select security_code, exchange_code " \
                                "from tquant_stock_day_kline " \
                                "group by security_code, exchange_code"
@@ -61,27 +62,39 @@ class StockDeriveKlineService(BaseService):
     def loop(self):
         while True:
             self.processing()
+            if self.one_time:
+                break
             time.sleep(self.sleep_seconds)
-            break
 
     def processing(self):
         """
         根据已有的股票代码，循环查询单个股票的日K数据
         :return:
         """
-        self.base_info('{0[0]} 【start】...', [self.get_current_method_name()])
+        self.base_info('{0[0]} {0[1]}【start】...', [self.get_current_method_name(), self.kline_type])
         try:
             # 需要处理的股票代码
             result = self.dbService.query(self.query_stock_sql)
-            if result:
+            self.processing_security_codes(result, 'batch-0')
+        except Exception:
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}',
+                            [self.get_current_method_name(), self.kline_type, exc_type, exc_value, exc_traceback])
+        self.base_info('{0[0]} {0[1]}【end】', [self.get_current_method_name(), self.kline_type])
+
+    def processing_security_codes(self, tuple_security_codes, batch_name):
+        self.base_info('{0[0]} {0[1]} {0[2]}【start】...', [self.get_current_method_name(), self.kline_type, batch_name])
+        try:
+            if tuple_security_codes:
                 calendar_group = self.get_calendar_group_by_kline_type()
-                len_result = len(result)
+                len_result = len(tuple_security_codes)
                 # 需要处理的股票代码进度计数
                 data_add_up = 0
                 # 需要处理的股票代码进度打印字符
                 process_line = ''
-                for stock_item in result:
-                    time.sleep(2)
+                security_code = None
+                exchange_code = None
+                for stock_item in tuple_security_codes:
                     data_add_up += 1
                     try:
                         # 股票代码
@@ -89,34 +102,34 @@ class StockDeriveKlineService(BaseService):
                         exchange_code = stock_item[1]
                         # 根据security_code和exchange_code日K已经处理的最大交易日
                         kline_max_the_date = self.get_kline_max_the_date(security_code, exchange_code)
-                        self.processing_single_security_code(security_code, exchange_code, calendar_group, kline_max_the_date)
+                        self.processing_single_security_code(security_code, exchange_code, calendar_group,
+                                                             kline_max_the_date)
                         # 批量(10)列表的处理进度打印
                         if data_add_up % 10 == 0:
                             if data_add_up % 100 == 0:
                                 process_line += '#'
                             processing = self.base_round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
-                            self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%...',
-                                           [self.get_current_method_name(), 'inner', len_result, process_line,
+                            self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]}%...',
+                                           [self.get_current_method_name(), self.kline_type, batch_name, 'inner', len_result, process_line,
                                             processing])
-                            # time.sleep(1)
                     except Exception:
                         exc_type, exc_value, exc_traceback = sys.exc_info()
-                        self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',
-                                        [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
+                        self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}',
+                                        [self.get_current_method_name(), self.kline_type,
+                                         exc_type, exc_value, exc_traceback])
                 # 最后一批增量列表的处理进度打印
                 if data_add_up % 10 != 0:
-                    if data_add_up % 100 == 0:
-                        process_line += '#'
+                    process_line += '#'
                     processing = self.base_round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
-                    self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
-                                   [self.get_current_method_name(), 'outer', len_result, process_line,
+                    self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]}%',
+                                   [self.get_current_method_name(), self.kline_type, batch_name,
+                                    'outer', len_result, process_line,
                                     processing])
-                    # time.sleep(1)
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',
-                            [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
-            self.base_info('{0[0]} 【end】', [self.get_current_method_name()])
+            self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}',
+                            [self.get_current_method_name(), self.kline_type, exc_type, exc_value, exc_traceback])
+        self.base_info('{0[0]} {0[1]} {0[2]}【end】', [self.get_current_method_name(), self.kline_type, batch_name])
 
     def get_calendar_group_by_kline_type(self):
         if self.kline_type == 'week':
@@ -178,7 +191,7 @@ class StockDeriveKlineService(BaseService):
         :param kline_max_the_date: 已经处理过的K线的最大交易日，有可能为空，即一条也没有处理过
         :return:
         """
-        self.base_info('{0[0]} {0[1]} {0[2]} 【start】...',
+        self.base_debug('{0[0]} {0[1]} {0[2]} 【start】...',
                        [self.get_current_method_name(), security_code, exchange_code])
         # is_first就是是否第一次需要查询的标识
         is_first = True
@@ -243,15 +256,15 @@ class StockDeriveKlineService(BaseService):
                     upsert_sql_list = []
                     process_line += '='
                     processing = self.base_round(Decimal(add_up) / Decimal(len(calendar_group)), 4) * 100
-                    self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%...',
-                                   [self.get_current_method_name(), 'inner', len(calendar_group), process_line,
+                    self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]} {0[7]}%...',
+                                   [self.get_current_method_name(), self.kline_type, security_code, exchange_code, 'inner', len(calendar_group), process_line,
                                     processing])
         if len(upsert_sql_list) > 0:
             self.dbService.insert_many(upsert_sql_list)
             processing = self.base_round(Decimal(add_up) / Decimal(len(calendar_group)), 4) * 100
-            self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
-                           [self.get_current_method_name(), 'outer', len(calendar_group), process_line, processing])
-        self.base_info('{0[0]} {0[1]} {0[2]} 【end】',
+            self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]} {0[7]}%',
+                           [self.get_current_method_name(), self.kline_type, security_code, exchange_code, 'outer', len(calendar_group), process_line, processing])
+        self.base_debug('{0[0]} {0[1]} {0[2]} 【end】',
                        [self.get_current_method_name(), security_code, exchange_code])
 
     def get_kline_previous_data(self, group_start_the_date):

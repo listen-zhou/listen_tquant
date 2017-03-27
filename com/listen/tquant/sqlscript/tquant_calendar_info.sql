@@ -1,25 +1,16 @@
-CREATE TABLE `tquant_calendar_info` (
-	`id` BIGINT(20) NOT NULL AUTO_INCREMENT COMMENT '主键id',
-	`the_date` DATE NOT NULL COMMENT '交易日（年月日）',
-	`is_month_end` INT(11) NOT NULL COMMENT '是否是月度末的最后一天，1-是，0-否',
-	`is_month_start` INT(11) NOT NULL COMMENT '是否是月度始的第一天，1-是，0-否',
-	`is_quarter_end` INT(11) NOT NULL COMMENT '是否是季度末的最后一天，1-是，0-否',
-	`is_quarter_start` INT(11) NOT NULL COMMENT '是否是季度始的第一天，1-是，0-否',
-	`is_year_end` INT(11) NOT NULL COMMENT '是否是年末的最后一天，1-是，0-否',
-	`is_year_start` INT(11) NOT NULL COMMENT '是否年始的第一天，1-是，0-否',
-	`day_of_week` INT(11) NOT NULL COMMENT '第几天（一周中的），周一是0',
-	`week_of_year` INT(11) NOT NULL COMMENT '第几周（一年中的）',
-	`quarter` INT(11) NOT NULL COMMENT '季度（数字）',
-	`year` INT(11) NOT NULL COMMENT '年度（数字）',
-	`month` INT(11) NOT NULL COMMENT '月度（数字）',
+CREATE TABLE `tquant_security_info` (
+	`id` INT(11) NOT NULL AUTO_INCREMENT COMMENT '主键id',
+	`security_code` VARCHAR(20) NOT NULL COMMENT '证券代码',
+	`security_name` VARCHAR(200) NOT NULL COMMENT '证券简称',
+	`security_type` VARCHAR(20) NOT NULL COMMENT '证券类型,STOCK,INDEX,FUND',
+	`exchange_code` VARCHAR(20) NOT NULL COMMENT '交易所标识,SZ,SH',
 	`auto_date` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '时间戳',
 	PRIMARY KEY (`id`),
-	UNIQUE INDEX `the_date` (`the_date`),
+	UNIQUE INDEX `security_code_security_type_exchange_code` (`security_code`, `security_type`, `exchange_code`),
 	INDEX `auto_date` (`auto_date`),
-	INDEX `year` (`year`),
-	INDEX `month` (`month`)
+	INDEX `security_name` (`security_name`)
 )
-COMMENT='证券交易日表'
+COMMENT='证券基本信息表'
 COLLATE='utf8_general_ci'
 ENGINE=InnoDB
 ;

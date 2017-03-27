@@ -16,11 +16,12 @@ class StockAverageLineService(BaseService):
     """
     股票均线数据处理服务
     """
-    def __init__(self, dbService, ma, logger, sleep_seconds):
+    def __init__(self, dbService, ma, logger, sleep_seconds, one_time):
         super(StockAverageLineService, self).__init__(logger)
         self.ma = ma
         self.dbService = dbService
         self.sleep_seconds = sleep_seconds
+        self.one_time = one_time
         self.base_info('{0[0]} ...', [self.get_current_method_name()])
 
         self.query_stock_sql = "select security_code, exchange_code " \
@@ -45,8 +46,9 @@ class StockAverageLineService(BaseService):
     def loop(self):
         while True:
             self.processing()
+            if self.one_time:
+                break
             time.sleep(self.sleep_seconds)
-            break
 
     def processing(self):
         """
@@ -59,14 +61,23 @@ class StockAverageLineService(BaseService):
             calendar_max_the_date = self.get_calendar_max_the_date()
             # 需要处理的股票代码，查询股票基本信息表 security_code, exchange_code
             result = self.dbService.query(self.query_stock_sql)
-            if result:
-                len_result = len(result)
+            self.processing_security_codes(result, calendar_max_the_date, 'batch-0')
+        except Exception:
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',
+                            [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
+        self.base_info('{0[0]} 【end】', [self.get_current_method_name()])
+
+    def processing_security_codes(self, tuple_security_codes, calendar_max_the_date, batch_name):
+        self.base_info('{0[0]} {0[1]}【start】...', [self.get_current_method_name(), batch_name])
+        try:
+            if tuple_security_codes:
+                len_result = len(tuple_security_codes)
                 # 需要处理的股票代码进度计数
                 data_add_up = 0
                 # 需要处理的股票代码进度打印字符
                 process_line = ''
-                for stock_item in result:
-                    time.sleep(2)
+                for stock_item in tuple_security_codes:
                     data_add_up += 1
                     # 股票代码
                     security_code = stock_item[0]
@@ -75,37 +86,35 @@ class StockAverageLineService(BaseService):
                     average_line_max_the_date = self.get_average_line_max_the_date(security_code, exchange_code)
                     # 如果均线已经处理的最大交易日和交易日表的最大交易日相等，说明无需处理该均线数据，继续下一个处理
                     if calendar_max_the_date == average_line_max_the_date:
-                        self.base_warn('{0[0]} {0[1]} {0[2]} {0[3]} calendar_max_the_date {0[4]} == average_line_max_the_date {0[5]}',
-                                       [self.get_current_method_name(), self.ma, security_code, exchange_code, calendar_max_the_date,
-                                        average_line_max_the_date])
+                        self.base_warn(
+                            '{0[0]} {0[1]} {0[2]} {0[3]} calendar_max_the_date {0[4]} == average_line_max_the_date {0[5]}',
+                            [self.get_current_method_name(), self.ma, security_code, exchange_code,
+                             calendar_max_the_date,
+                             average_line_max_the_date])
                         continue
                     # 根据average_line_max_the_date已经处理的均线最大交易日，获取递减ma个交易日后的交易日
                     decline_ma_the_date = self.get_calendar_decline_ma_the_date(average_line_max_the_date)
                     self.processing_single_security_code(security_code, exchange_code, decline_ma_the_date)
                     # 批量(10)列表的处理进度打印
                     if data_add_up % 10 == 0:
-                        if data_add_up % 100 == 0:
-                            process_line += '#'
+                        process_line += '#'
                         processing = self.base_round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
-                        self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]}%...',
-                                       [self.get_current_method_name(), self.ma, 'inner', len_result, process_line,
+                        self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]} {0[7]}%...',
+                                       [self.get_current_method_name(), self.ma, batch_name, 'inner', data_add_up, len_result, process_line,
                                         processing])
-                        # time.sleep(1)
 
                 # 最后一批增量列表的处理进度打印
                 if data_add_up % 10 != 0:
-                    if data_add_up % 100 == 0:
-                        process_line += '#'
+                    process_line += '#'
                     processing = self.base_round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
-                    self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]}%',
-                                   [self.get_current_method_name(), self.ma, 'outer', len_result, process_line,
+                    self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]} {0[7]}%',
+                                   [self.get_current_method_name(), self.ma, batch_name, 'outer', data_add_up, len_result, process_line,
                                     processing])
-                    # time.sleep(1)
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',
                             [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
-        self.base_info('{0[0]} 【end】', [self.get_current_method_name()])
+        self.base_info('{0[0]} {0[1]}【end】', [self.get_current_method_name(), batch_name])
 
 
     def process_day_kline_tuple(self, result, security_code, exchange_code):
@@ -173,7 +182,7 @@ class StockAverageLineService(BaseService):
         :param decline_ma_the_date: 根据已经处理均线数据的最大交易日往前递减ma个交易日后的交易日，如果是单只股票执行，则可设置为1970-01-01日期
         :return: 返回批量处理时传入的进度累加值data_add_up
         """
-        self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} decline_ma_the_date {0[4]} 【start】...',
+        self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} decline_ma_the_date {0[4]} 【start】...',
                        [self.get_current_method_name(), self.ma, security_code, exchange_code, decline_ma_the_date])
         try:
             sql = "select the_date, close, amount, vol " \
@@ -300,11 +309,9 @@ class StockAverageLineService(BaseService):
                             processing = 1.0
                         else:
                             processing = self.base_round(Decimal(add_up) / Decimal(len_result - self.ma), 4) * 100
-                        self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%...',
-                                        [self.get_current_method_name(), 'inner', len_result, process_line,
+                        self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]} {0[7]}%...',
+                                        [self.get_current_method_name(), self.ma, 'inner', security_code, exchange_code, len_result, process_line,
                                          processing])
-                        # 批量提交数据后当前线程休眠1秒
-                        # time.sleep(1)
                     else:
                         upsert_sql_list.append(upsert_sql)
                     i += 1
@@ -321,11 +328,11 @@ class StockAverageLineService(BaseService):
                         processing = 1.0
                     else:
                         processing = self.base_round(Decimal(add_up) / Decimal(len_result - self.ma), 4) * 100
-                    self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
-                                    [self.get_current_method_name(), 'outer', len_result, process_line, processing])
+                    self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]} {0[7]}%',
+                                    [self.get_current_method_name(), self.ma, 'outer', security_code, exchange_code, len_result, process_line, processing])
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',
-                            [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
-        self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} decline_ma_the_date {0[4]} 【end】',
+            self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]}',
+                            [self.get_current_method_name(), self.ma, security_code, exchange_code, exc_type, exc_value, exc_traceback])
+        self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} decline_ma_the_date {0[4]} 【end】',
                        [self.get_current_method_name(), self.ma, security_code, exchange_code, decline_ma_the_date])

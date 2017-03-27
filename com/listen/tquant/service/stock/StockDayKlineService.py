@@ -17,10 +17,11 @@ class StockDayKlineService(BaseService):
     """
     股票日K数据处理服务
     """
-    def __init__(self, dbService, logger, sleep_seconds):
+    def __init__(self, dbService, logger, sleep_seconds, one_time):
         super(StockDayKlineService, self).__init__(logger)
         self.dbService = dbService
         self.sleep_seconds = sleep_seconds
+        self.one_time = one_time
         self.base_info('{0[0]} ...', [self.get_current_method_name()])
         self.query_stock_sql = "select a.security_code, a.exchange_code " \
                                "from tquant_security_info a " \
@@ -37,8 +38,9 @@ class StockDayKlineService(BaseService):
     def loop(self):
         while True:
             self.processing()
+            if self.one_time:
+                break
             time.sleep(self.sleep_seconds)
-            break
 
     def processing(self):
         """
@@ -68,10 +70,11 @@ class StockDayKlineService(BaseService):
                 # 需要处理的股票代码进度计数
                 data_add_up = 0
                 # 需要处理的股票代码进度打印字符
-                process_line = ''
+                process_line = '#'
+                security_code = None
+                exchange_code = None
                 for stock_item in tuple_security_codes:
                     try:
-                        time.sleep(2)
                         data_add_up += 1
                         # 股票代码
                         security_code = stock_item[0]
@@ -96,37 +99,33 @@ class StockDayKlineService(BaseService):
                                      calendar_max_the_date, day_kline_max_the_date, recent_few_the_date])
                                 continue
 
-                        self.processing_single_security_code(security_code, exchange_code, recent_few_the_date)
+                        self.processing_single_security_code(security_code, exchange_code, recent_few_the_date, batch_number)
 
                         # 批量(10)列表的处理进度打印
                         if data_add_up % 10 == 0:
-                            if data_add_up % 100 == 0:
-                                process_line += '#'
+                            process_line += '#'
                             processing = self.base_round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
-                            self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]}%...',
-                                           [self.get_current_method_name(), batch_number, 'inner', len_result,
+                            self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]}%...',
+                                           [self.get_current_method_name(), batch_number, 'inner', data_add_up, len_result,
                                             process_line,
                                             processing])
-                            # time.sleep(1)
                     except Exception:
                         exc_type, exc_value, exc_traceback = sys.exc_info()
-                        self.base_exception('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]} {0[7]} {0[8]} ',
+                        self.base_exception('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]} {0[7]} {0[8]}',
                                             [self.get_current_method_name(), batch_number, 'inner', security_code, exchange_code,
                                              recent_few_the_date,
                                              exc_type, exc_value, exc_traceback])
                 # 最后一批增量列表的处理进度打印
                 if data_add_up % 10 != 0:
-                    if data_add_up % 100 == 0:
-                        process_line += '#'
+                    process_line += '#'
                     processing = self.base_round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
-                    self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]}%',
-                                   [self.get_current_method_name(), batch_number, 'outer', len_result, process_line,
+                    self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]}%',
+                                   [self.get_current_method_name(), batch_number, 'outer', data_add_up, len_result, process_line,
                                     processing])
-                    # time.sleep(1)
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            self.base_exception('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]} {0[7]} {0[8]} ',
-                                [self.get_current_method_name(), batch_number, 'outer', security_code, exchange_code,
+            self.base_exception('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]}',
+                                [self.get_current_method_name(), batch_number, 'outer',
                                  recent_few_the_date,
                                  exc_type, exc_value, exc_traceback])
         self.base_info('{0[0]} {0[1]} 【end】', [self.get_current_method_name(), batch_number])
@@ -143,7 +142,7 @@ class StockDayKlineService(BaseService):
             return max_the_date
         return None
 
-    def processing_single_security_code(self, security_code, exchange_code, recent_few_the_date):
+    def processing_single_security_code(self, security_code, exchange_code, recent_few_the_date, batch_number):
         """
         处理增量单只股票的日K数据，如果recent_few_the_date==0，则处理全量数据
         :param security_code: 股票代码
@@ -152,8 +151,8 @@ class StockDayKlineService(BaseService):
         :param data_add_up: 处理进度增量标示
         :return:
         """
-        self.base_info('{0[0]} {0[1]} {0[2]} 【start】...',
-                       [self.get_current_method_name(), security_code, exchange_code])
+        self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]}【start】...',
+                       [self.get_current_method_name(), batch_number, security_code, exchange_code])
         # 注释掉的这行是因为在测试的时候发现返回的数据有问题，
         # 当 security_code == '000505' the_date='2010-01-04' 时，返回的数据为：
         # amount: [ 39478241.  39478241.]vol: [ 5286272.  5286272.]open: [ 7.5  7.5]high: [ 7.65  7.65]low: [ 7.36  7.36]close: [ 7.44  7.44]
@@ -175,7 +174,7 @@ class StockDayKlineService(BaseService):
                 # 需要处理的单只股票进度计数
                 add_up = 0
                 # 需要处理的单只股票进度打印字符
-                process_line = ''
+                process_line = '='
                 # 循环处理security_code的股票日K数据
                 if indexes_values is not None:
                     for idx in indexes_values:
@@ -190,12 +189,10 @@ class StockDayKlineService(BaseService):
                             if upsert_sql != None:
                                 upsert_sql_list.append(upsert_sql)
                             processing = self.base_round(Decimal(add_up) / Decimal(len(indexes_values)), 4) * 100
-                            self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]}%...',
-                                            [self.get_current_method_name(), 'inner', security_code, exchange_code,
+                            self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]} {0[7]}%...',
+                                            [self.get_current_method_name(), batch_number, 'inner', security_code, exchange_code,
                                              len(result), process_line,
                                              processing])
-                            # 批量提交数据后当前线程休眠1秒
-                            # time.sleep(1)
                         else:
                             upsert_sql_list.append(upsert_sql)
                     # 处理最后一批security_code的更新语句
@@ -203,22 +200,24 @@ class StockDayKlineService(BaseService):
                         self.dbService.insert_many(upsert_sql_list)
                         process_line += '='
                         processing = self.base_round(Decimal(add_up) / Decimal(len(indexes_values)), 4) * 100
-                        self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]}%',
-                                        [self.get_current_method_name(), 'outer', security_code, exchange_code,
-                                         len(result), process_line, processing])
+                        self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]} {0[7]}%...',
+                                        [self.get_current_method_name(), batch_number, 'outer', security_code,
+                                         exchange_code,
+                                         len(result), process_line,
+                                         processing])
                 else:
-                    self.base_warn('{0[0]}, {0[1]}, {0[2]}, {0[3]} result index.values is None',
-                                   [self.get_current_method_name(), security_code, exchange_code, recent_few_the_date])
+                    self.base_warn('{0[0]}, {0[1]}, {0[2]}, {0[3]} {0[4]} result index.values is None',
+                                   [self.get_current_method_name(), batch_number, security_code, exchange_code, recent_few_the_date])
             else:
-                self.base_warn('{0[0]}, {0[1]}, {0[2]}, {0[3]} result is None',
-                               [self.get_current_method_name(), security_code, exchange_code, recent_few_the_date])
+                self.base_warn('{0[0]}, {0[1]}, {0[2]}, {0[3]} {0[4]} result is None',
+                               [self.get_current_method_name(), batch_number, security_code, exchange_code, recent_few_the_date])
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            self.base_exception('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]} ',
-                            [self.get_current_method_name(), security_code, exchange_code, recent_few_the_date,
+            self.base_exception('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]} {0[7]}',
+                            [self.get_current_method_name(), batch_number, security_code, exchange_code, recent_few_the_date,
                              exc_type, exc_value, exc_traceback])
-        self.base_info('{0[0]} {0[1]} {0[2]} 【end】',
-                       [self.get_current_method_name(), security_code, exchange_code])
+        self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} 【end】',
+                       [self.get_current_method_name(), batch_number, security_code, exchange_code])
 
     def get_calendar_recent_few_the_date(self, day_kline_max_the_date):
         """

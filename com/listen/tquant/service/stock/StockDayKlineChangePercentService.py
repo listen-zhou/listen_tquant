@@ -16,10 +16,11 @@ class StockDayKlineChangePercentService(BaseService):
     """
     股票日K数据涨跌幅处理服务
     """
-    def __init__(self, dbService, logger, sleep_seconds):
+    def __init__(self, dbService, logger, sleep_seconds, one_time):
         super(StockDayKlineChangePercentService, self).__init__(logger)
         self.dbService = dbService
         self.sleep_seconds = sleep_seconds
+        self.one_time = one_time
         self.base_info('{0[0]} ...', [self.get_current_method_name()])
         self.query_stock_sql = "select security_code, exchange_code " \
                                "from tquant_stock_day_kline " \
@@ -40,8 +41,9 @@ class StockDayKlineChangePercentService(BaseService):
     def loop(self):
         while True:
             self.processing()
+            if self.one_time:
+                break
             time.sleep(self.sleep_seconds)
-            break
 
     def processing(self):
         """
@@ -52,14 +54,26 @@ class StockDayKlineChangePercentService(BaseService):
         try:
             # 需要处理的股票代码
             result = self.dbService.query(self.query_stock_sql)
-            if result != None and len(result) > 0:
-                len_result = len(result)
+            self.processing_security_codes(result, 'batch-0')
+        except Exception:
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            self.base_error('{0[0]} {0[1]} {0[2]} {0[3]}',
+                            [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
+        self.base_info('{0[0]} 【end】', [self.get_current_method_name()])
+
+    def processing_security_codes(self, tuple_security_codes, batch_number):
+        self.base_info('{0[0]} {0[1]}【start】...', [self.get_current_method_name(), batch_number])
+        try:
+            # 需要处理的股票代码
+            if tuple_security_codes != None and len(tuple_security_codes) > 0:
+                len_result = len(tuple_security_codes)
                 # 需要处理的股票代码进度计数
                 data_add_up = 0
                 # 需要处理的股票代码进度打印字符
                 data_process_line = ''
-                for stock_item in result:
-                    time.sleep(2)
+                security_code = None
+                exchange_code = None
+                for stock_item in tuple_security_codes:
                     data_add_up += 1
                     try:
                         # 股票代码
@@ -71,30 +85,31 @@ class StockDayKlineChangePercentService(BaseService):
                         self.processing_single_security_code(security_code, exchange_code, day_kline_max_the_date)
                         # 批量(10)列表的处理进度打印
                         if data_add_up % 10 == 0:
-                            if data_add_up % 100 == 0:
-                                data_process_line += '#'
+                            data_process_line += '#'
                             processing = self.base_round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
-                            self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%...',
-                                           [self.get_current_method_name(), 'inner', len_result, data_process_line,
+                            self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]}%...',
+                                           [self.get_current_method_name(), batch_number, 'inner',
+                                            data_add_up, len_result, data_process_line,
                                             processing])
-                            # time.sleep(1)
                     except Exception:
                         exc_type, exc_value, exc_traceback = sys.exc_info()
-                        self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',
-                                        [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
+                        self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}',
+                                        [self.get_current_method_name(), batch_number, exc_type,
+                                         exc_value, exc_traceback])
                 # 最后一批增量列表的处理进度打印
                 if data_add_up % 10 != 0:
-                    if data_add_up % 100 == 0:
-                        data_process_line += '#'
+                    data_process_line += '#'
                     processing = self.base_round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
-                    self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
-                                   [self.get_current_method_name(), 'outer', len_result, data_process_line,
+                    self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]}%',
+                                   [self.get_current_method_name(), batch_number, 'outer',
+                                    data_add_up, len_result,
+                                    data_process_line,
                                     processing])
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',
-                            [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
-        self.base_info('{0[0]} 【end】', [self.get_current_method_name()])
+            self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}',
+                            [self.get_current_method_name(), batch_number, exc_type, exc_value, exc_traceback])
+        self.base_info('{0[0]} {0[1]}【end】', [self.get_current_method_name(),batch_number])
 
     def processing_single_security_code(self, security_code, exchange_code, day_kline_max_the_date):
         """
@@ -104,7 +119,7 @@ class StockDayKlineChangePercentService(BaseService):
         :param day_kline_max_the_date: 已结处理过的最大交易日
         :return:
         """
-        self.base_info('{0[0]} {0[1]} {0[2]} 【start】...',
+        self.base_debug('{0[0]} {0[1]} {0[2]} 【start】...',
                        [self.get_current_method_name(), security_code, exchange_code])
         sql = "select the_date, close, amount, vol from tquant_stock_day_kline " \
               "where security_code = {security_code} " \
@@ -144,11 +159,9 @@ class StockDayKlineChangePercentService(BaseService):
                 if upsert_sql != None:
                     upsert_sql_list.append(upsert_sql)
                 processing = self.base_round(Decimal(add_up) / Decimal(len_result), 4) * 100
-                self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%...',
-                                [self.get_current_method_name(), 'inner', len_result, process_line,
+                self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} [0[6]]%...',
+                                [self.get_current_method_name(), security_code, exchange_code, 'inner', len_result, process_line,
                                  processing])
-                # 批量提交数据后当前线程休眠1秒
-                # time.sleep(1)
             else:
                 if upsert_sql != None:
                     upsert_sql_list.append(upsert_sql)
@@ -158,10 +171,10 @@ class StockDayKlineChangePercentService(BaseService):
             self.dbService.insert_many(upsert_sql_list)
             process_line += '='
             processing = self.base_round(Decimal(add_up) / Decimal(len_result), 4) * 100
-            self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
-                            [self.get_current_method_name(), 'outer', len_result, process_line,
+            self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]}%',
+                            [self.get_current_method_name(), security_code, exchange_code, 'outer', len_result, process_line,
                              processing])
-        self.base_info('{0[0]} {0[1]} {0[2]} 【end】',
+        self.base_debug('{0[0]} {0[1]} {0[2]} 【end】',
                        [self.get_current_method_name(), security_code, exchange_code])
 
 
