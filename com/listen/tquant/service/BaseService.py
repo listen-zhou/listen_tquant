@@ -17,26 +17,9 @@ context.rounding = decimal.ROUND_05UP
 class BaseService():
     def __init__(self, logger):
         self.logger = logger
-        self.serviceName = 'BaseService'
-        self.list = [self.get_clsss_name()]
 
-    def deepcopy_list(self):
-        return copy.deepcopy(self.list)
-
-    def deepcopy_from_list(self, list):
+    def deepcopy_list(slef, list):
         return copy.deepcopy(list)
-
-    def base_debug(self, list):
-        self.logger.debug(list)
-
-    def base_info(self, list):
-        self.logger.info(list)
-
-    def base_warn(self, list):
-        self.logger.warn(list)
-
-    def base_error(self, list):
-        self.logger.error(list)
 
     def base_exception(self, list):
         self.logger.exception(list)

@@ -18,6 +18,7 @@ class Logger():
             message = ''
             while i < length:
                 message += '{0[' + str(i) + ']} '
+                i += 1
             message = message.format(list)
             return message
         return ''

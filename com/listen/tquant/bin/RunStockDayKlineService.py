@@ -3,15 +3,10 @@ import threading
 
 import datetime
 
-from com.listen.tquant.service.stock.StockAverageLineService import StockAverageLineService
-from com.listen.tquant.service.stock.StockDayKlineChangePercentService import StockDayKlineChangePercentService
-from com.listen.tquant.service.stock.StockInfoService import StockInfoService
 from com.listen.tquant.service.stock.StockDayKlineService import StockDayKlineService
-from com.listen.tquant.service.stock.CalendarService import CalendarService
 
 
 from com.listen.tquant.dbservice.Service import DbService
-from com.listen.tquant.service.stock.StockDeriveKlineService import StockDeriveKlineService
 from com.listen.tquant.log.Logger import Logger
 threads = []
 
