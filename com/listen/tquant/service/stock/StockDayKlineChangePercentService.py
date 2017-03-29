@@ -159,8 +159,9 @@ class StockDayKlineChangePercentService(BaseService):
                 if upsert_sql != None:
                     upsert_sql_list.append(upsert_sql)
                 processing = self.base_round(Decimal(add_up) / Decimal(len_result), 4) * 100
-                self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} [0[6]]%...',
-                                [self.get_current_method_name(), security_code, exchange_code, 'inner', len_result, process_line,
+                self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]} {0[7]}%...',
+                                [self.get_current_method_name(), security_code, exchange_code, 'inner',
+                                 add_up, len_result, process_line,
                                  processing])
             else:
                 if upsert_sql != None:
@@ -171,8 +172,9 @@ class StockDayKlineChangePercentService(BaseService):
             self.dbService.insert_many(upsert_sql_list)
             process_line += '='
             processing = self.base_round(Decimal(add_up) / Decimal(len_result), 4) * 100
-            self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]}%',
-                            [self.get_current_method_name(), security_code, exchange_code, 'outer', len_result, process_line,
+            self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]} {[0[7]]}%',
+                            [self.get_current_method_name(), security_code, exchange_code, 'outer',
+                             add_up, len_result, process_line,
                              processing])
         self.base_debug('{0[0]} {0[1]} {0[2]} 【end】',
                        [self.get_current_method_name(), security_code, exchange_code])

@@ -19,7 +19,8 @@ class CalendarService(BaseService):
     """
     def __init__(self, dbService, logger, sleep_seconds, one_time):
         super(CalendarService, self).__init__(logger)
-        self.base_info('{0[0]} ...', [self.get_current_method_name()])
+        self.base_log_list = self.deepcopy_list().append(self.get_clsss_name())
+        self.base_info(self.deepcopy_from_list(self.base_log_list).append(self.get_method_name()))
         self.dbService = dbService
         self.sleep_seconds = sleep_seconds
         self.one_time = one_time
@@ -47,7 +48,12 @@ class CalendarService(BaseService):
         调用交易日查询接口，返回信息，并解析入库
         :return:
         """
-        self.base_info('{0[0]} 【start】...', [self.get_current_method_name()])
+        log_list = self.deepcopy_from_list(self.base_log_list)
+        log_list.append(self.get_method_name())
+
+        start_log_list = self.deepcopy_from_list(log_list)
+        start_log_list.append('【start】')
+        self.base_info(start_log_list)
         upsert_sql_list = []
         add_up = 0
         process_line = ''
@@ -55,8 +61,12 @@ class CalendarService(BaseService):
             # 全部交易日数据
             result = tt.get_calendar('1970-01-01', '2018-01-01')
             len_result = len(result)
-            self.base_info('{0[0]} {0[1]} {0[2]}',
-                           [self.get_current_method_name(), 'tt.get_calendar() result size ', len_result])
+
+            calendar_log_list = self.deepcopy_from_list(log_list)
+            calendar_log_list.append('tt.get_calendar() result size ')
+            calendar_log_list.append(len_result)
+            self.base_info(calendar_log_list)
+
             for calendar in result:
                 add_up += 1
                 # 定义临时存储单行数据的字典，用以后续做执行sql的数据填充
@@ -107,23 +117,42 @@ class CalendarService(BaseService):
                         process_line += '='
                         processing = self.base_round(Decimal(add_up) / Decimal(len_result), 4) * 100
                         upsert_sql_list.append(upsert_sql)
-                        self.base_info('{0[0]} {0[1]} processing {0[2]} {0[3]} {0[4]}%...',
-                                       [self.get_current_method_name(), 'inner', len_result, process_line, processing])
+
+                        batch_log_list = self.deepcopy_from_list(log_list)
+                        batch_log_list.append('inner')
+                        batch_log_list.append(len_result)
+                        batch_log_list.append(process_line)
+                        batch_log_list.append(str(processing) + '%')
+                        self.base_info(batch_log_list)
+
                     else:
                         upsert_sql_list.append(upsert_sql)
                 except Exception:
                     exc_type, exc_value, exc_traceback = sys.exc_info()
-                    self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',
-                                    [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
+                    except_log_list = self.deepcopy_from_list(log_list)
+                    except_log_list.append(exc_type)
+                    except_log_list.append(exc_value)
+                    except_log_list.apend(exc_traceback)
+                    self.base_error(except_log_list)
             if len(upsert_sql_list) > 0:
                 self.dbService.insert_many(upsert_sql_list)
                 process_line += '='
             processing = self.base_round(Decimal(add_up) / Decimal(len_result), 4) * 100
-            self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
-                           [self.get_current_method_name(), 'outer', len_result, process_line, processing])
+
+            batch_log_list = self.deepcopy_from_list(log_list)
+            batch_log_list.append('outer')
+            batch_log_list.append(len_result)
+            batch_log_list.append(process_line)
+            batch_log_list.append(str(processing) + '%')
+            self.base_info(batch_log_list)
 
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',
-                            [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
-        self.base_info('{0[0]} 【end】', [self.get_current_method_name()])
+            except_log_list = self.deepcopy_from_list(log_list)
+            except_log_list.append(exc_type)
+            except_log_list.append(exc_value)
+            except_log_list.apend(exc_traceback)
+            self.base_error(except_log_list)
+        end_log_list = self.deepcopy_from_list(log_list)
+        end_log_list.append('【end】')
+        self.base_info(end_log_list)

@@ -11,28 +11,34 @@ class Logger():
         logging.config.fileConfig('logger.cfg')
         self.log = logging.getLogger('log')
 
-    def debug(self, message, list):
+    def format_list(self, list):
         if list:
+            length = len(list)
+            i = 0
+            message = ''
+            while i < length:
+                message += '{0[' + str(i) + ']} '
             message = message.format(list)
+            return message
+        return ''
+
+    def debug(self, list):
+        message = self.format_list(list)
         self.log.debug(message)
 
-    def info(self, message, list):
-        if list:
-            message = message.format(list)
+    def info(self, list):
+        message = self.format_list(list)
         self.log.info(message)
 
-    def warn(self, message, list):
-        if list:
-            message = message.format(list)
+    def warn(self, list):
+        message = self.format_list(list)
         self.log.warn(message)
 
     def error(self, message, list):
-        if list:
-            message = message.format(list)
+        message = self.format_list(list)
         self.log.error(message)
 
     def exception(self, message, list):
-        if list:
-            message = message.format(list)
-            self.log.error(message)
-            logging.exception(message)
+        message = self.format_list(list)
+        self.log.error(message)
+        logging.exception(message)

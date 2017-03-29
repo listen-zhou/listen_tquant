@@ -74,7 +74,7 @@ class StockDayKlineService(BaseService):
                 security_code = None
                 exchange_code = None
                 for stock_item in tuple_security_codes:
-                    time.sleep(2)
+                    # time.sleep(2)
                     try:
                         data_add_up += 1
                         # 股票代码
@@ -189,9 +189,9 @@ class StockDayKlineService(BaseService):
                             if upsert_sql != None:
                                 upsert_sql_list.append(upsert_sql)
                             processing = self.base_round(Decimal(add_up) / Decimal(len(indexes_values)), 4) * 100
-                            self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]} {0[7]}%...',
+                            self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]} {0[7]} {0[8]}%...',
                                             [self.get_current_method_name(), batch_number, 'inner', security_code, exchange_code,
-                                             len(result), process_line,
+                                             add_up, len(result), process_line,
                                              processing])
                         else:
                             upsert_sql_list.append(upsert_sql)
@@ -200,10 +200,10 @@ class StockDayKlineService(BaseService):
                         self.dbService.insert_many(upsert_sql_list)
                         process_line += '='
                         processing = self.base_round(Decimal(add_up) / Decimal(len(indexes_values)), 4) * 100
-                        self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]} {0[7]}%...',
+                        self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]} {0[7]} {0[8]}%...',
                                         [self.get_current_method_name(), batch_number, 'outer', security_code,
                                          exchange_code,
-                                         len(result), process_line,
+                                         add_up, len(result), process_line,
                                          processing])
                 else:
                     self.base_warn('{0[0]}, {0[1]}, {0[2]}, {0[3]} {0[4]} result index.values is None',

@@ -3,6 +3,8 @@ import threading
 
 import datetime
 
+import tushare
+
 from com.listen.tquant.service.stock.StockAverageLineService import StockAverageLineService
 from com.listen.tquant.service.stock.StockDayKlineChangePercentService import StockDayKlineChangePercentService
 from com.listen.tquant.service.stock.StockInfoService import StockInfoService
