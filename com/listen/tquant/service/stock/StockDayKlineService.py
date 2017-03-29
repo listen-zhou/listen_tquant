@@ -165,7 +165,7 @@ class StockDayKlineService(BaseService):
                         except_log_list.append(exchange_code)
                         except_log_list.append(exc_type)
                         except_log_list.append(exc_value)
-                        except_log_list.apend(exc_traceback)
+                        except_log_list.append(exc_traceback)
                         self.logger.exception(except_log_list)
                 # 最后一批增量列表的处理进度打印
                 if data_add_up % 10 != 0:
@@ -185,7 +185,7 @@ class StockDayKlineService(BaseService):
             except_log_list.append('outer')
             except_log_list.append(exc_type)
             except_log_list.append(exc_value)
-            except_log_list.apend(exc_traceback)
+            except_log_list.append(exc_traceback)
             self.logger.exception(except_log_list)
         end_log_list = self.deepcopy_list(security_codes_log_list)
         end_log_list.append('tuple_security_codes size')
@@ -324,7 +324,7 @@ class StockDayKlineService(BaseService):
             except_log_list = self.deepcopy_list(single_log_list)
             except_log_list.append(exc_type)
             except_log_list.append(exc_value)
-            except_log_list.apend(exc_traceback)
+            except_log_list.append(exc_traceback)
             self.logger.exception(except_log_list)
         end_log_list = self.deepcopy_list(single_log_list)
         end_log_list.append('【end】')
@@ -409,6 +409,6 @@ class StockDayKlineService(BaseService):
             except_log_list = self.deepcopy_list(single_log_list)
             except_log_list.append(exc_type)
             except_log_list.append(exc_value)
-            except_log_list.apend(exc_traceback)
+            except_log_list.append(exc_traceback)
             self.logger.exception(except_log_list)
             return None
