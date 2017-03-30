@@ -49,15 +49,21 @@ threads = []
 #     return threads
 ######################################################################################
 
-def initThreads(logger, sleep_seconds, one_time):
-    mas = [5, 10, 20, 30, 60, 120, 250]
-    # mas = [5]
-    for ma in mas:
-        dbService5 = DbService()
-        stockAverageLineService5 = StockAverageLineService(dbService5, ma, logger, sleep_seconds, one_time)
-        stockAverageLineServiceThread5 = threading.Thread(target=stockAverageLineService5.loop)
-        stockAverageLineServiceThread5.setName('stockAverageLineServiceThread-ma-' + str(ma))
-        threads.append(stockAverageLineServiceThread5)
-    return threads
+logger = Logger()
+sleep_seconds = 120
+one_time = False
 
+mas = [5, 10, 20, 30, 60, 120, 250]
+# mas = [5]
+for ma in mas:
+    dbService5 = DbService()
+    stockAverageLineService5 = StockAverageLineService(dbService5, ma, logger, sleep_seconds, one_time)
+    stockAverageLineServiceThread5 = threading.Thread(target=stockAverageLineService5.loop)
+    stockAverageLineServiceThread5.setName('stockAverageLineServiceThread-ma-' + str(ma))
+    threads.append(stockAverageLineServiceThread5)
+
+for thread in threads:
+    # 设置为守护线程
+    thread.setDaemon(False)
+    thread.start()
 

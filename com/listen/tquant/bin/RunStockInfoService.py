@@ -16,15 +16,20 @@ from com.listen.tquant.log.Logger import Logger
 threads = []
 
 
-def initThreads(logger, sleep_seconds, one_time):
+logger = Logger()
+sleep_seconds = 120
+one_time = True
 
-    # 处理股票基本信息线程
-    dbService1 = DbService()
-    stockInfoService = StockInfoService(dbService1, logger, sleep_seconds, one_time)
-    stockInfoThread = threading.Thread(target=stockInfoService.loop)
-    stockInfoThread.setName('stockInfoThread')
-    threads.append(stockInfoThread)
-    return threads
+
+# 处理股票基本信息线程
+dbService1 = DbService()
+stockInfoService = StockInfoService(dbService1, logger, sleep_seconds, one_time)
+stockInfoThread = threading.Thread(target=stockInfoService.loop)
+stockInfoThread.setName('stockInfoThread')
+threads.append(stockInfoThread)
 ####################################################################################
 
-
+for thread in threads:
+    # 设置为守护线程
+    thread.setDaemon(False)
+    thread.start()

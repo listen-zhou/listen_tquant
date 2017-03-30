@@ -5,19 +5,21 @@ from com.listen.tquant.service.stock.StockDeriveKlineService import StockDeriveK
 from com.listen.tquant.log.Logger import Logger
 import threading
 
+logger = Logger()
+sleep_seconds = 120
+one_time = False
+
 threads = []
 
-def initThreads(logger, sleep_seconds, one_time):
-    # # 根据股票的日K数据处理生成周（月，季，年）K数据
-    kline_types = ['week', 'month', 'quarter', 'year']
-    # kline_types = ['week']
-    for kline_type in kline_types:
-        dbServiceweek = DbService()
-        stockDeriveKlineServiceweek = StockDeriveKlineService(dbServiceweek, kline_type, logger, sleep_seconds, one_time)
-        stockDeriveKlineServiceThreadweek = threading.Thread(target=stockDeriveKlineServiceweek.loop)
-        stockDeriveKlineServiceThreadweek.setName('stockDeriveKlineServiceThread-' + kline_type)
-        threads.append(stockDeriveKlineServiceThreadweek)
-    return threads
+# # 根据股票的日K数据处理生成周（月，季，年）K数据
+kline_types = ['week', 'month', 'quarter', 'year']
+# kline_types = ['week']
+for kline_type in kline_types:
+    dbServiceweek = DbService()
+    stockDeriveKlineServiceweek = StockDeriveKlineService(dbServiceweek, kline_type, logger, sleep_seconds, one_time)
+    stockDeriveKlineServiceThreadweek = threading.Thread(target=stockDeriveKlineServiceweek.loop)
+    stockDeriveKlineServiceThreadweek.setName('stockDeriveKlineServiceThread-' + kline_type)
+    threads.append(stockDeriveKlineServiceThreadweek)
 ########################################
 
 # 根据股票的日K数据处理生成周（月，季，年）K数据
