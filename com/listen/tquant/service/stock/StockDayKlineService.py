@@ -80,7 +80,7 @@ class StockDayKlineService(BaseService):
         end_log_list.append('【end】')
         self.logger.info(end_log_list)
 
-    def processing_security_codes(self, processing_log_list, tuple_security_codes, calendar_max_the_date, batch_number):
+    def processing_security_codes(self, processing_log_list, tuple_security_codes, calendar_max_the_date, batch_name):
         """
         处理一组股票代码的日K数据
         :param list_security_codes: 
@@ -91,7 +91,7 @@ class StockDayKlineService(BaseService):
             security_codes_log_list = self.deepcopy_list(processing_log_list)
         else:
             security_codes_log_list = self.deepcopy_list(self.log_list)
-        security_codes_log_list.append(batch_number)
+        security_codes_log_list.append(batch_name)
             
         start_log_list = self.deepcopy_list(security_codes_log_list)
         start_log_list.append('tuple_security_codes size')
@@ -105,7 +105,7 @@ class StockDayKlineService(BaseService):
             if tuple_security_codes is not None and len(tuple_security_codes) > 0:
                 len_result = len(tuple_security_codes)
                 # 需要处理的股票代码进度计数
-                data_add_up = 0
+                add_up = 0
                 # 需要处理的股票代码进度打印字符
                 process_line = '#'
                 for stock_item in tuple_security_codes:
@@ -113,7 +113,7 @@ class StockDayKlineService(BaseService):
                     exchange_code = None
                     # time.sleep(2)
                     try:
-                        data_add_up += 1
+                        add_up += 1
                         # 股票代码
                         security_code = stock_item[0]
                         exchange_code = stock_item[1]
@@ -146,20 +146,20 @@ class StockDayKlineService(BaseService):
                         self.processing_single_security_code(security_codes_log_list, security_code, exchange_code, recent_few_days)
 
                         # 批量(10)列表的处理进度打印
-                        if data_add_up % 10 == 0:
+                        if add_up % 10 == 0:
                             process_line += '#'
-                            processing = self.base_round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
+                            processing = self.base_round(Decimal(add_up) / Decimal(len_result), 4) * 100
                             
                             batch_log_list = self.deepcopy_list(security_codes_log_list)
                             batch_log_list.append('inner')
-                            batch_log_list.append(data_add_up)
+                            batch_log_list.append(add_up)
                             batch_log_list.append(len_result)
                             batch_log_list.append(process_line)
                             batch_log_list.append(str(processing) + '%')
                             self.logger.info(batch_log_list)
                     except Exception:
                         exc_type, exc_value, exc_traceback = sys.exc_info()
-                        except_log_list = self.deepcopy_list(processing_log_list)
+                        except_log_list = self.deepcopy_list(security_codes_log_list)
                         except_log_list.append('inner')
                         except_log_list.append(security_code)
                         except_log_list.append(exchange_code)
@@ -168,25 +168,26 @@ class StockDayKlineService(BaseService):
                         except_log_list.append(exc_traceback)
                         self.logger.exception(except_log_list)
                 # 最后一批增量列表的处理进度打印
-                if data_add_up % 10 != 0:
+                if add_up % 10 != 0:
                     process_line += '#'
-                    processing = self.base_round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
+                    processing = self.base_round(Decimal(add_up) / Decimal(len_result), 4) * 100
                     
                     batch_log_list = self.deepcopy_list(security_codes_log_list)
                     batch_log_list.append('outer')
-                    batch_log_list.append(data_add_up)
+                    batch_log_list.append(add_up)
                     batch_log_list.append(len_result)
                     batch_log_list.append(process_line)
                     batch_log_list.append(str(processing) + '%')
                     self.logger.info(batch_log_list)
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            except_log_list = self.deepcopy_list(processing_log_list)
+            except_log_list = self.deepcopy_list(security_codes_log_list)
             except_log_list.append('outer')
             except_log_list.append(exc_type)
             except_log_list.append(exc_value)
             except_log_list.append(exc_traceback)
             self.logger.exception(except_log_list)
+
         end_log_list = self.deepcopy_list(security_codes_log_list)
         end_log_list.append('tuple_security_codes size')
         end_log_list.append(len(tuple_security_codes))
@@ -209,11 +210,11 @@ class StockDayKlineService(BaseService):
 
     def processing_single_security_code(self, security_codes_log_list, security_code, exchange_code, recent_few_days):
         """
-        处理增量单只股票的日K数据，如果recent_few_the_date==0，则处理全量数据
+        处理增量单只股票的日K数据，如果recent_few_days==0，则处理全量数据
         :param security_code: 股票代码
         :param exchange_code: 交易所
         :param recent_few_days: 需要处理近几日的数字
-        :param data_add_up: 处理进度增量标示
+        :param add_up: 处理进度增量标示
         :return:
         """
         if security_codes_log_list is not None and len(security_codes_log_list) > 0:
@@ -258,8 +259,7 @@ class StockDayKlineService(BaseService):
                         add_up += 1
                         # 解析股票日K数据（每行）
                         # 解析每行的返回值格式为list [the_date, amount, vol, open, high, low, close]
-                        list_data = self.analysis_columns(single_log_list, result, idx, security_code, exchange_code)
-                        upsert_sql = None
+                        list_data = self.analysis_columns(single_log_list, result, idx)
                         if list_data is not None:
                             upsert_sql = self.upsert.format(
                                 security_code=self.quotes_surround(security_code),
@@ -275,8 +275,9 @@ class StockDayKlineService(BaseService):
                         else:
                             upsert_sql = None
                             warn_log_list = self.deepcopy_list(single_log_list)
-                            warn_log_list.append('analysis_columns result is None')
+                            warn_log_list.append('analysis_columns list_data is None')
                             self.logger.warn(warn_log_list)
+
                             continue
                         # 批量(100)提交数据更新
                         if len(upsert_sql_list) == 3000:
@@ -300,6 +301,7 @@ class StockDayKlineService(BaseService):
                         self.dbService.insert_many(upsert_sql_list)
                         process_line += '='
                         processing = self.base_round(Decimal(add_up) / Decimal(len(indexes_values)), 4) * 100
+
                         batch_log_list = self.deepcopy_list(single_log_list)
                         batch_log_list.append('outer')
                         batch_log_list.append(add_up)
@@ -319,6 +321,7 @@ class StockDayKlineService(BaseService):
                 warn_log_list.append(recent_few_days)
                 warn_log_list.append('result is None')
                 self.logger.warn(warn_log_list)
+
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             except_log_list = self.deepcopy_list(single_log_list)
@@ -326,6 +329,7 @@ class StockDayKlineService(BaseService):
             except_log_list.append(exc_value)
             except_log_list.append(exc_traceback)
             self.logger.exception(except_log_list)
+
         end_log_list = self.deepcopy_list(single_log_list)
         end_log_list.append('【end】')
         self.logger.info(end_log_list)
@@ -361,7 +365,7 @@ class StockDayKlineService(BaseService):
             return max_the_date
         return None
 
-    def analysis_columns(self, single_log_list, day_kline, idx, security_code, exchange_code):
+    def analysis_columns(self, single_log_list, day_kline, idx):
         """
         解析股票日K数据（每行）
         :param day_kline: 日K的DataFrame对象

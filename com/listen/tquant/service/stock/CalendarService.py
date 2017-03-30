@@ -69,6 +69,7 @@ class CalendarService(BaseService):
         start_log_list = self.deepcopy_list(processing_log_list)
         start_log_list.append('【start】')
         self.logger.info(start_log_list)
+
         upsert_sql_list = []
         add_up = 0
         process_line = ''
@@ -124,7 +125,7 @@ class CalendarService(BaseService):
                         year=year,
                         month=month
                     )
-                    if len(upsert_sql_list) == 100:
+                    if len(upsert_sql_list) == 1000:
                         self.dbService.insert_many(upsert_sql_list)
                         upsert_sql_list = []
                         process_line += '='
@@ -148,6 +149,7 @@ class CalendarService(BaseService):
                     except_log_list.append(exc_value)
                     except_log_list.apend(exc_traceback)
                     self.logger.error(except_log_list)
+
             if len(upsert_sql_list) > 0:
                 self.dbService.insert_many(upsert_sql_list)
                 process_line += '='
@@ -168,6 +170,7 @@ class CalendarService(BaseService):
             except_log_list.append(exc_value)
             except_log_list.apend(exc_traceback)
             self.logger.error(except_log_list)
+
         end_log_list = self.deepcopy_list(processing_log_list)
         end_log_list.append('【end】')
         self.logger.info(end_log_list)

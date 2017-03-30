@@ -7,18 +7,17 @@ import threading
 
 threads = []
 
-logger = Logger()
-sleep_seconds = 120
-one_time = False
-
-# # 根据股票的日K数据处理生成周（月，季，年）K数据
-kline_types = ['week', 'month', 'quarter', 'year']
-for kline_type in kline_types:
-    dbServiceweek = DbService()
-    stockDeriveKlineServiceweek = StockDeriveKlineService(dbServiceweek, kline_type, logger, sleep_seconds, one_time)
-    stockDeriveKlineServiceThreadweek = threading.Thread(target=stockDeriveKlineServiceweek.loop)
-    stockDeriveKlineServiceThreadweek.setName('stockDeriveKlineServiceThread-' + kline_type)
-    threads.append(stockDeriveKlineServiceThreadweek)
+def initThreads(logger, sleep_seconds, one_time):
+    # # 根据股票的日K数据处理生成周（月，季，年）K数据
+    kline_types = ['week', 'month', 'quarter', 'year']
+    # kline_types = ['week']
+    for kline_type in kline_types:
+        dbServiceweek = DbService()
+        stockDeriveKlineServiceweek = StockDeriveKlineService(dbServiceweek, kline_type, logger, sleep_seconds, one_time)
+        stockDeriveKlineServiceThreadweek = threading.Thread(target=stockDeriveKlineServiceweek.loop)
+        stockDeriveKlineServiceThreadweek.setName('stockDeriveKlineServiceThread-' + kline_type)
+        threads.append(stockDeriveKlineServiceThreadweek)
+    return threads
 ########################################
 
 # 根据股票的日K数据处理生成周（月，季，年）K数据
@@ -57,7 +56,6 @@ for kline_type in kline_types:
 #             threads.append(stockDeriveKlineServiceKlineBatchThread)
 #             i += 1
 
-print('threads size:', len(threads))
 for thread in threads:
     # 设置为守护线程
     thread.setDaemon(False)

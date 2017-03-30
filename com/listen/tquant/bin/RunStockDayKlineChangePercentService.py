@@ -3,29 +3,21 @@ import threading
 
 import datetime
 
-from com.listen.tquant.service.stock.StockAverageLineService import StockAverageLineService
 from com.listen.tquant.service.stock.StockDayKlineChangePercentService import StockDayKlineChangePercentService
-from com.listen.tquant.service.stock.StockInfoService import StockInfoService
-from com.listen.tquant.service.stock.StockDayKlineService import StockDayKlineService
-from com.listen.tquant.service.stock.CalendarService import CalendarService
 
 
 from com.listen.tquant.dbservice.Service import DbService
-from com.listen.tquant.service.stock.StockDeriveKlineService import StockDeriveKlineService
 from com.listen.tquant.log.Logger import Logger
 threads = []
 
-logger = Logger()
-sleep_seconds = 120
-one_time = False
-
-
-# # 处理股票日K涨跌幅数据
-dbService6 = DbService()
-stockDayKlineChangePercentService6 = StockDayKlineChangePercentService(dbService6, logger, sleep_seconds, one_time)
-stockDayKlineChangePercentService6Thread = threading.Thread(target=stockDayKlineChangePercentService6.loop)
-stockDayKlineChangePercentService6Thread.setName('stockDayKlineChangePercentService6Thread')
-threads.append(stockDayKlineChangePercentService6Thread)
+def initThreads(logger, sleep_seconds, one_time):
+    # # 处理股票日K涨跌幅数据
+    dbService6 = DbService()
+    stockDayKlineChangePercentService6 = StockDayKlineChangePercentService(dbService6, logger, sleep_seconds, one_time)
+    stockDayKlineChangePercentService6Thread = threading.Thread(target=stockDayKlineChangePercentService6.loop)
+    stockDayKlineChangePercentService6Thread.setName('stockDayKlineChangePercentService6Thread')
+    threads.append(stockDayKlineChangePercentService6Thread)
+    return threads
 #############################################################################
 
 # # 多线程处理全部日K涨跌幅数据，分组处理
@@ -61,12 +53,5 @@ threads.append(stockDayKlineChangePercentService6Thread)
 #         threads.append(stockDayKlineChangePercentServiceBatchThread)
 #         i += 1
 # #######################################################################################################
-
-
-print('threads size:', len(threads))
-for thread in threads:
-    # 设置为守护线程
-    thread.setDaemon(False)
-    thread.start()
 
 

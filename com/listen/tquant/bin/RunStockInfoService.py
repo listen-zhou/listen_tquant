@@ -15,23 +15,16 @@ from com.listen.tquant.service.stock.StockDeriveKlineService import StockDeriveK
 from com.listen.tquant.log.Logger import Logger
 threads = []
 
-logger = Logger()
-sleep_seconds = 43200
-one_time = True
 
-# 处理股票基本信息线程
-dbService1 = DbService()
-stockInfoService = StockInfoService(dbService1, logger, sleep_seconds, one_time)
-stockInfoThread = threading.Thread(target=stockInfoService.loop)
-stockInfoThread.setName('stockInfoThread')
-threads.append(stockInfoThread)
+def initThreads(logger, sleep_seconds, one_time):
+
+    # 处理股票基本信息线程
+    dbService1 = DbService()
+    stockInfoService = StockInfoService(dbService1, logger, sleep_seconds, one_time)
+    stockInfoThread = threading.Thread(target=stockInfoService.loop)
+    stockInfoThread.setName('stockInfoThread')
+    threads.append(stockInfoThread)
+    return threads
 ####################################################################################
-
-
-print('threads size:', len(threads))
-for thread in threads:
-    # 设置为守护线程
-    thread.setDaemon(False)
-    thread.start()
 
 

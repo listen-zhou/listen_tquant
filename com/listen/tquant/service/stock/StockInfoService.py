@@ -20,6 +20,17 @@ class StockInfoService(BaseService):
         self.dbService = dbService
         self.sleep_seconds = sleep_seconds
         self.one_time = one_time
+        self.security_type = 'STOCK'
+        self.log_list = [self.get_clsss_name()]
+
+        init_log_list = self.deepcopy_list(self.log_list)
+        init_log_list.append(self.get_method_name())
+        init_log_list.append('sleep seconds')
+        init_log_list.append(sleep_seconds)
+        init_log_list.append('one_time')
+        init_log_list.append(one_time)
+        self.logger.info(init_log_list)
+
         self.upsert_stock_info_sql = "insert into tquant_security_info (security_code, security_name, " \
                                     "security_type, exchange_code) " \
                                     "values ({security_code}, {security_name}, {security_type}, {exchange_code}) " \
@@ -27,24 +38,34 @@ class StockInfoService(BaseService):
                                     "security_name=values(security_name) "
 
     def loop(self):
+        loop_log_list = self.deepcopy_list(self.log_list)
+        loop_log_list.append(self.get_method_name())
+        self.logger.info(loop_log_list)
         while True:
-            self.processing()
+            self.processing(loop_log_list)
             if self.one_time:
                 break
             time.sleep(self.sleep_seconds)
 
-    def processing(self):
+    def processing(self, loop_log_list):
         """
         调用股票查询接口，返回全部A股基本信息，并解析入库
         :return:
         """
-        self.base_info('{0[0]} 【start】...', [self.get_current_method_name()])
+        if loop_log_list is not None and len(loop_log_list) > 0:
+            processing_log_list = self.deepcopy_list(loop_log_list)
+        else:
+            processing_log_list = self.deepcopy_list(self.log_list)
+        processing_log_list.append(self.get_method_name())
+
+        start_log_list = self.deepcopy_list(processing_log_list)
+        start_log_list.append('【start】')
+        self.logger.info(start_log_list)
+
         try:
             # 股票基本信息返回结果为 DataFrame
             stock_list = tt.get_stocklist()
-            self.base_info('{0[0]} {0[1]} {0[2]}',
-                           [self.get_current_method_name(), 'tt.get_stocklist() result size ', len(stock_list)])
-            if stock_list.empty == False:
+            if stock_list is not None and stock_list.empty is False:
                 # 索引对象的值为list
                 indexes_values = stock_list.index.values
                 # 每行的列头中包含两个字段id, name，分别对应股票代码和股票简称，股票代码中包含有交易所标识信息
@@ -54,24 +75,20 @@ class StockInfoService(BaseService):
                 # 数据处理进度计数
                 add_up = 0
                 # 数据处理进度打印字符
-                process_line = ''
+                process_line = '='
                 len_indexes_values = len(indexes_values)
                 for idx in indexes_values:
                     add_up += 1
-                    # 定义临时存储单行数据的字典，用以后续做执行sql的数据填充
-                    value_dict = {}
                     try:
-                        value_dict['security_type'] = "STOCK"
-                        value_dict['security_code'] = idx
-                        value_dict['security_name'] = stock_list.at[idx, 'name']
+                        security_code = idx
+                        security_name = stock_list.at[idx, 'name']
                         exchange_code = stock_list.at[idx, 'id']
                         exchange_code = exchange_code[0:exchange_code.find(idx)].upper()
-                        value_dict['exchange_code'] = exchange_code
                         upsert_sql = self.upsert_stock_info_sql.format(
-                            exchange_code=self.quotes_surround(value_dict['exchange_code']),
-                            security_code=self.quotes_surround(value_dict['security_code']),
-                            security_name=self.quotes_surround(value_dict['security_name']),
-                            security_type=self.quotes_surround(value_dict['security_type'])
+                            exchange_code=self.quotes_surround(exchange_code),
+                            security_code=self.quotes_surround(security_code),
+                            security_name=self.quotes_surround(security_name),
+                            security_type=self.quotes_surround(self.security_type)
                         )
                         if len(upsert_sql_list) == 100:
                             self.dbService.insert_many(upsert_sql_list)
@@ -79,24 +96,41 @@ class StockInfoService(BaseService):
                             process_line += '='
                             processing = self.base_round(Decimal(add_up) / Decimal(len_indexes_values), 4) * 100
                             upsert_sql_list.append(upsert_sql)
-                            self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%...',
-                                           [self.get_current_method_name(), 'inner', len_indexes_values, process_line,
-                                            processing])
+                            batch_log_list = self.deepcopy_list(processing_log_list)
+                            batch_log_list.append('inner')
+                            batch_log_list.append(add_up)
+                            batch_log_list.append(len_indexes_values)
+                            batch_log_list.append(process_line)
+                            batch_log_list.append(str(processing) + '%')
+                            self.logger.info(batch_log_list)
                         else:
                             upsert_sql_list.append(upsert_sql)
                     except Exception:
                         exc_type, exc_value, exc_traceback = sys.exc_info()
-                        self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',
-                                        [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
+                        except_log_list = self.deepcopy_list(processing_log_list)
+                        except_log_list.append(exc_type)
+                        except_log_list.append(exc_value)
+                        except_log_list.apend(exc_traceback)
+                        self.logger.error(except_log_list)
                 if len(upsert_sql_list) > 0:
                     self.dbService.insert_many(upsert_sql_list)
                     process_line += '='
                 processing = self.base_round(Decimal(add_up) / Decimal(len_indexes_values), 4) * 100
-                self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]}%',
-                               [self.get_current_method_name(), 'outer', len_indexes_values, process_line,
-                                processing])
+                batch_log_list = self.deepcopy_list(processing_log_list)
+                batch_log_list.append('outer')
+                batch_log_list.append(add_up)
+                batch_log_list.append(len_indexes_values)
+                batch_log_list.append(process_line)
+                batch_log_list.append(str(processing) + '%')
+                self.logger.info(batch_log_list)
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',
-                            [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
-        self.base_info('{0[0]} 【end】', [self.get_current_method_name()])
+            except_log_list = self.deepcopy_list(processing_log_list)
+            except_log_list.append(exc_type)
+            except_log_list.append(exc_value)
+            except_log_list.apend(exc_traceback)
+            self.logger.error(except_log_list)
+
+        end_log_list = self.deepcopy_list(processing_log_list)
+        end_log_list.append('【end】')
+        self.logger.info(end_log_list)

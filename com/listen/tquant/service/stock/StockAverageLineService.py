@@ -22,7 +22,18 @@ class StockAverageLineService(BaseService):
         self.dbService = dbService
         self.sleep_seconds = sleep_seconds
         self.one_time = one_time
-        self.base_info('{0[0]} ...', [self.get_current_method_name()])
+
+        self.log_list = [self.get_clsss_name()]
+        self.log_list.append('ma')
+        self.log_list.append(ma)
+
+        init_log_list = self.deepcopy_list(self.log_list)
+        init_log_list.append(self.get_method_name())
+        init_log_list.append('sleep seconds')
+        init_log_list.append(sleep_seconds)
+        init_log_list.append('one_time')
+        init_log_list.append(one_time)
+        self.logger.info(init_log_list)
 
         self.query_stock_sql = "select security_code, exchange_code " \
                                "from tquant_stock_day_kline " \
@@ -44,85 +55,126 @@ class StockAverageLineService(BaseService):
                       'vol=values(vol), previous_vol=values(previous_vol), vol_change_percent=values(vol_change_percent)'
 
     def loop(self):
+        loop_log_list = self.deepcopy_list(self.log_list)
+        loop_log_list.append(self.get_method_name())
+        self.logger.info(loop_log_list)
         while True:
-            self.processing()
+            self.processing(loop_log_list)
             if self.one_time:
                 break
             time.sleep(self.sleep_seconds)
 
-    def processing(self):
+    def processing(self, loop_log_list):
         """
         根据已有的股票代码，循环查询单个股票的日K数据
         :return:
         """
-        self.base_info('{0[0]} 【start】...', [self.get_current_method_name()])
-        try:
-            # 获取交易日表最大交易日日期，类型为date.datetime
-            calendar_max_the_date = self.get_calendar_max_the_date()
-            # 需要处理的股票代码，查询股票基本信息表 security_code, exchange_code
-            result = self.dbService.query(self.query_stock_sql)
-            self.processing_security_codes(result, calendar_max_the_date, 'batch-0')
-        except Exception:
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',
-                            [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
-        self.base_info('{0[0]} 【end】', [self.get_current_method_name()])
+        if loop_log_list is not None and len(loop_log_list) > 0:
+            processing_log_list = self.deepcopy_list(loop_log_list)
+        else:
+            processing_log_list = self.deepcopy_list(self.log_list)
+        processing_log_list.append(self.get_method_name())
 
-    def processing_security_codes(self, tuple_security_codes, calendar_max_the_date, batch_name):
-        self.base_info('{0[0]} {0[1]}【start】...', [self.get_current_method_name(), batch_name])
+        start_log_list = self.deepcopy_list(processing_log_list)
+        start_log_list.append('【start】')
+        self.logger.info(start_log_list)
+
+        # 获取交易日表最大交易日日期，类型为date.datetime
+        calendar_max_the_date = self.get_calendar_max_the_date()
+        # 需要处理的股票代码，查询股票基本信息表 security_code, exchange_code
+        result = self.dbService.query(self.query_stock_sql)
+        self.processing_security_codes(processing_log_list, result, calendar_max_the_date, 'batch-0')
+
+        end_log_list = self.deepcopy_list(processing_log_list)
+        end_log_list.append('【end】')
+        self.logger.info(end_log_list)
+
+    def processing_security_codes(self, processing_log_list, tuple_security_codes, calendar_max_the_date, batch_name):
+        if processing_log_list is not None and len(processing_log_list) > 0:
+            security_codes_log_list = self.deepcopy_list(processing_log_list)
+        else:
+            security_codes_log_list = self.deepcopy_list(self.log_list)
+        security_codes_log_list.append(self.get_method_name())
+        security_codes_log_list.append(batch_name)
+
+        len_result = len(tuple_security_codes)
+
+        start_log_list = self.deepcopy_list(security_codes_log_list)
+        start_log_list.append('tuple_security_codes size')
+        start_log_list.append(len_result)
+        start_log_list.append('calendar_max_the_date')
+        start_log_list.append(calendar_max_the_date)
+        start_log_list.append('【start】')
+        self.logger.info(start_log_list)
+
         try:
-            if tuple_security_codes:
-                len_result = len(tuple_security_codes)
+            if tuple_security_codes is not None and len_result > 0:
                 # 需要处理的股票代码进度计数
-                data_add_up = 0
+                add_up = 0
                 # 需要处理的股票代码进度打印字符
-                process_line = ''
+                process_line = '#'
+                security_code = None
+                exchange_code = None
                 for stock_item in tuple_security_codes:
-                    data_add_up += 1
+                    add_up += 1
                     # 股票代码
                     security_code = stock_item[0]
                     exchange_code = stock_item[1]
+
                     # 根据security_code和exchange_code和ma查询ma均线已经处理的最大交易日
                     average_line_max_the_date = self.get_average_line_max_the_date(security_code, exchange_code)
                     # 如果均线已经处理的最大交易日和交易日表的最大交易日相等，说明无需处理该均线数据，继续下一个处理
                     if calendar_max_the_date == average_line_max_the_date:
-                        self.base_warn(
-                            '{0[0]} {0[1]} {0[2]} {0[3]} calendar_max_the_date {0[4]} == average_line_max_the_date {0[5]}',
-                            [self.get_current_method_name(), self.ma, security_code, exchange_code,
-                             calendar_max_the_date,
-                             average_line_max_the_date])
+                        warn_log_list = self.deepcopy_list(security_codes_log_list)
+                        warn_log_list.append(security_code)
+                        warn_log_list.append(exchange_code)
+                        warn_log_list.append('average_line_max_the_date')
+                        warn_log_list.append(average_line_max_the_date)
+                        self.logger.warn(warn_log_list)
                         continue
+
                     # 根据average_line_max_the_date已经处理的均线最大交易日，获取递减ma个交易日后的交易日
                     decline_ma_the_date = self.get_calendar_decline_ma_the_date(average_line_max_the_date)
-                    self.processing_single_security_code(security_code, exchange_code, decline_ma_the_date)
-                    # 批量(10)列表的处理进度打印
-                    if data_add_up % 10 == 0:
-                        process_line += '#'
-                        processing = self.base_round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
-                        self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]} {0[7]}%...',
-                                       [self.get_current_method_name(), self.ma, batch_name, 'inner', data_add_up, len_result, process_line,
-                                        processing])
+                    self.processing_single_security_code(security_codes_log_list, security_code, exchange_code, decline_ma_the_date)
 
+                    # 批量(10)列表的处理进度打印
+                    if add_up % 10 == 0:
+                        process_line += '#'
+                        processing = self.base_round(Decimal(add_up) / Decimal(len_result), 4) * 100
+                        batch_log_list = self.deepcopy_list(security_codes_log_list)
+                        batch_log_list.append('inner')
+                        batch_log_list.append(add_up)
+                        batch_log_list.append(len_result)
+                        batch_log_list.append(process_line)
+                        batch_log_list.append(str(processing) + '%')
+                        self.logger.info(batch_log_list)
                 # 最后一批增量列表的处理进度打印
-                if data_add_up % 10 != 0:
+                if add_up % 10 != 0:
                     process_line += '#'
-                    processing = self.base_round(Decimal(data_add_up) / Decimal(len_result), 4) * 100
-                    self.base_info('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]} {0[7]}%',
-                                   [self.get_current_method_name(), self.ma, batch_name, 'outer', data_add_up, len_result, process_line,
-                                    processing])
+                    processing = self.base_round(Decimal(add_up) / Decimal(len_result), 4) * 100
+                    batch_log_list = self.deepcopy_list(security_codes_log_list)
+                    batch_log_list.append('outer')
+                    batch_log_list.append(add_up)
+                    batch_log_list.append(len_result)
+                    batch_log_list.append(process_line)
+                    batch_log_list.append(str(processing) + '%')
+                    self.logger.info(batch_log_list)
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} ',
-                            [self.get_current_method_name(), exc_type, exc_value, exc_traceback])
-        self.base_info('{0[0]} {0[1]}【end】', [self.get_current_method_name(), batch_name])
-
-
-    def process_day_kline_tuple(self, result, security_code, exchange_code):
-        self.base_debug('{0[0]} {0[1]} {0[2]}【start】...',
-                       [self.get_current_method_name(), security_code, exchange_code])
-
-        self.base_debug('{0[0]} {0[1]} {0[2]}【end】',
-                       [self.get_current_method_name(), security_code, exchange_code])
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            except_log_list = self.deepcopy_list(processing_log_list)
+            except_log_list.append('outer')
+            except_log_list.append(exc_type)
+            except_log_list.append(exc_value)
+            except_log_list.append(exc_traceback)
+            self.logger.exception(except_log_list)
+        end_log_list = self.deepcopy_list(security_codes_log_list)
+        end_log_list.append('tuple_security_codes size')
+        end_log_list.append(len(tuple_security_codes))
+        end_log_list.append('calendar_max_the_date')
+        end_log_list.append(calendar_max_the_date)
+        end_log_list.append('【end】')
+        self.logger.info(end_log_list)
 
     def get_previous_data(self, security_code, exchange_code, the_date):
         sql = "select close, amount, vol from tquant_stock_average_line where security_code = {security_code} " \
@@ -160,7 +212,7 @@ class StockAverageLineService(BaseService):
         return None
 
     def get_calendar_decline_ma_the_date(self, average_line_max_the_date):
-        if average_line_max_the_date != None and average_line_max_the_date != '':
+        if average_line_max_the_date is not None and average_line_max_the_date != '':
             sql = "select min(the_date) from (select the_date from tquant_calendar_info " \
                   "where the_date <= {average_line_max_the_date} " \
                   "order by the_date desc limit {ma}) a"
@@ -168,139 +220,174 @@ class StockAverageLineService(BaseService):
             sql = "select min(the_date) from tquant_calendar_info"
         the_date = self.dbService.query(sql.format(average_line_max_the_date=self.quotes_surround(str(average_line_max_the_date)),
                                                    ma=self.ma))
-        if the_date != None and the_date != '':
+        if the_date is not None and the_date != '':
             decline_ma_the_date = the_date[0][0]
             return decline_ma_the_date
         return None
 
-    def processing_single_security_code(self, security_code, exchange_code, decline_ma_the_date):
+    def get_stock_day_kline(self, security_code, exchange_code, decline_ma_the_date):
+        sql = "select the_date, close, amount, vol " \
+              "from tquant_stock_day_kline " \
+              "where security_code = {security_code} " \
+              "and exchange_code = {exchange_code} " \
+              "and close is not null and close > 0 "
+        max_the_date = None
+        if decline_ma_the_date is not None:
+            sql += "and the_date >= {max_the_date} "
+            max_the_date = decline_ma_the_date.strftime('%Y-%m-%d')
+        sql += "order by the_date asc "
+        sql = sql.format(security_code=self.quotes_surround(security_code),
+                         exchange_code=self.quotes_surround(exchange_code),
+                         max_the_date=self.quotes_surround(max_the_date))
+        result = self.dbService.query(sql)
+        return result
+
+    def analysis(self, temp_line_tuple, security_code, exchange_code, previous_data):
+        # temp_line_tuple中的数据为the_date, close
+        # 处理数据的交易日为切片的最后一个元素的the_date
+        the_date = temp_line_tuple[self.ma - 1][0]
+        temp_items = [item for item in temp_line_tuple[0:]]
+
+        close_list = [close for close in [item[1] for item in temp_items]]
+        average_close = self.base_round(self.average(close_list), 4)
+
+        amount_list = [amount for amount in [item[2] for item in temp_items]]
+        average_amount = self.base_round(self.average(amount_list), 4)
+
+        vol_list = [vol for vol in [item[3] for item in temp_items]]
+        average_vol = self.base_round(self.average(vol_list), 4)
+
+        previous_close = None
+        previous_amount = None
+        previous_vol = None
+        if previous_data is not None and len(previous_data) > 0:
+            previous_close = previous_data[0][0]
+            previous_amount = previous_data[0][1]
+            previous_vol = previous_data[0][2]
+        # 如果前一交易日均收盘价不为空，则计算当前交易日的均收盘价涨跌幅
+        if previous_close is not None:
+            # 如果前一交易日的均收盘价不为0，则计算涨跌幅
+            if previous_close != Decimal(0):
+                close_change_percent = self.base_round((average_close - previous_close) / previous_close, 4) * 100
+            # 如果前一交易日的均收盘价为0，则设置涨跌幅为0
+            else:
+                previous_close = self.base_round(Decimal(0), 4)
+                close_change_percent = self.base_round(Decimal(0), 4)
+        # 如果前一交易日均收盘价为空，则设置前一日均收盘价为0，涨跌幅为0，即0%
+        else:
+            previous_close = self.base_round(Decimal(0), 4)
+            close_change_percent = self.base_round(Decimal(0), 4)
+
+        # 如果前一交易日均交易额不为空，则计算当前交易日的均交易额涨跌幅
+        if previous_amount is not None:
+            # 如果前一交易日的均交易额不为0，则计算涨跌幅
+            if previous_amount != Decimal(0):
+                amount_change_percent = self.base_round((average_amount - previous_amount) / previous_amount, 4) * 100
+            # 如果前一交易日的均交易额为0，则设置涨跌幅为0
+            else:
+                previous_amount = self.base_round(Decimal(0), 4)
+                amount_change_percent = self.base_round(Decimal(0), 4)
+        # 如果前一交易日均交易额为空，则设置前一日均交易量为0，涨跌幅为0，即0%
+        else:
+            previous_amount = self.base_round(Decimal(0), 4)
+            amount_change_percent = self.base_round(Decimal(0), 4)
+
+        # 如果前一交易日均交易量不为空，则计算当前交易日的均交易量涨跌幅
+        if previous_vol is not None:
+            # 如果前一交易日的均交易额不为0，则计算涨跌幅
+            if previous_vol != Decimal(0):
+                vol_change_percent = self.base_round((average_vol - previous_vol) / previous_vol, 4) * 100
+            # 如果前一交易日的均交易量为0，则设置涨跌幅为0
+            else:
+                previous_vol = self.base_round(Decimal(0), 4)
+                vol_change_percent = self.base_round(Decimal(0), 4)
+        # 如果前一交易日均交易量为空，则设置前一日均交易量为0，涨跌幅为0，即0%
+        else:
+            previous_vol = self.base_round(Decimal(0), 4)
+            vol_change_percent = self.base_round(Decimal(0), 4)
+        return [the_date,
+                average_close, previous_close, close_change_percent,
+                average_amount, previous_amount, amount_change_percent,
+                average_vol, previous_vol, vol_change_percent]
+
+
+    def processing_single_security_code(self, security_codes_log_list, security_code, exchange_code, decline_ma_the_date):
         """
         处理单只股票的均线数据
         :param security_code: 股票代码
         :param exchange_code: 交易所代码
-        :param data_add_up: 针对批量处理股票代码时传入的进度参数
+        :param add_up: 针对批量处理股票代码时传入的进度参数
         :param decline_ma_the_date: 根据已经处理均线数据的最大交易日往前递减ma个交易日后的交易日，如果是单只股票执行，则可设置为1970-01-01日期
-        :return: 返回批量处理时传入的进度累加值data_add_up
+        :return: 返回批量处理时传入的进度累加值add_up
         """
-        self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} decline_ma_the_date {0[4]} 【start】...',
-                       [self.get_current_method_name(), self.ma, security_code, exchange_code, decline_ma_the_date])
+        if security_codes_log_list is not None and len(security_codes_log_list) > 0:
+            single_log_list = self.deepcopy_list(security_codes_log_list)
+        else:
+            single_log_list = self.deepcopy_list(self.log_list)
+        single_log_list.append(self.get_method_name())
+        single_log_list.append(security_code)
+        single_log_list.append(exchange_code)
+        single_log_list.append('decline_ma_the_date')
+        single_log_list.append(decline_ma_the_date)
+
+        start_log_list = self.deepcopy_list(single_log_list)
+        start_log_list.append('【start】')
+        self.logger.info(start_log_list)
+
         try:
-            sql = "select the_date, close, amount, vol " \
-                  "from tquant_stock_day_kline " \
-                  "where security_code = {security_code} " \
-                  "and exchange_code = {exchange_code} " \
-                  "and close is not null and close > 0 "
-            max_the_date = None
-            if decline_ma_the_date != None:
-                sql += "and the_date >= {max_the_date} "
-                max_the_date = decline_ma_the_date.strftime('%Y-%m-%d')
-            sql += "order by the_date asc "
-            sql = sql.format(security_code=self.quotes_surround(security_code),
-                             exchange_code=self.quotes_surround(exchange_code),
-                             max_the_date=self.quotes_surround(max_the_date))
-            result = self.dbService.query(sql)
-            if result != None and len(result) > 0:
+            result = self.get_stock_day_kline(security_code, exchange_code, decline_ma_the_date)
+            len_result = len(result)
+            if result is not None and len_result > 0:
                 # 开始解析股票日K数据, the_date, close
                 # 临时存储批量更新sql的列表
                 upsert_sql_list = []
                 # 需要处理的单只股票进度计数
                 add_up = 0
                 # 需要处理的单只股票进度打印字符
-                process_line = ''
+                process_line = '='
                 # 循环处理security_code的股票日K数据
                 i = 0
                 # 由于是批量提交数据，所以在查询前一日均价时，有可能还未提交，
                 # 所以只在第一次的时候查询，其他的情况用前一次计算的均价作为前一日均价
                 # is_first就是是否第一次需要查询的标识
-                is_first = True
-
-                previous_close = None
-                previous_amount = None
-                previous_vol = None
                 # 前一日均值
                 previous_data = None
-                len_result = len(result)
                 while i < len_result:
                     add_up += 1
                     # 如果切片的下标是元祖的最后一个元素，则退出，因为已经处理完毕
                     if (i + self.ma) > len_result:
+                        add_up -= 1
                         break
                     temp_line_tuple = result[i:(i + self.ma)]
-                    # temp_line_tuple中的数据为the_date, close
-                    # 处理数据的交易日为切片的最后一个元素的the_date
-                    the_date = temp_line_tuple[self.ma - 1][0]
-                    temp_items = [item for item in temp_line_tuple[0:]]
-                    close_list = [close for close in [item[1] for item in temp_items]]
-                    amount_list = [amount for amount in [item[2] for item in temp_items]]
-                    vol_list = [vol for vol in [item[3] for item in temp_items]]
-                    average_close = self.average(close_list)
-                    average_amount = self.average(amount_list)
-                    average_vol = self.average(vol_list)
-                    if is_first:
+                    # 如果前一交易日的数据为空，则去查询一次
+                    if previous_data is None or len(previous_data) == 0:
+                        the_date = temp_line_tuple[self.ma - 1][0]
                         previous_data = self.get_previous_data(security_code, exchange_code, the_date)
-                        # 查询前一交易日的均值数据，无论查询是否有数据，都不再查询，
-                        # 如果有数据，则使用前一交易日的数据，
-                        # 如果没有数据，则会认为是均值数据是第一次载入，会自动初始化，所以后续无需再查询赋值
-                        is_first = False
-                        if previous_data != None and len(previous_data) > 0:
-                            previous_close = previous_data[0][0]
-                            previous_amount = previous_data[0][1]
-                            previous_vol = previous_data[0][2]
-                    # 如果前一交易日均收盘价不为空，则计算当前交易日的均收盘价涨跌幅
-                    if previous_close != None:
-                        # 如果前一交易日的均收盘价不为0，则计算涨跌幅
-                        if previous_close != Decimal(0):
-                            close_change_percent = self.base_round((average_close - previous_close) / previous_close, 4) * 100
-                        # 如果前一交易日的均收盘价为0，则设置涨跌幅为1，即100%
-                        else:
-                            close_change_percent = self.base_round(Decimal(1), 4) * 100
-                    # 如果前一交易日均收盘价为空，则设置前一日均收盘价为当前均收盘价，涨跌幅为0，即0%
-                    else:
-                        previous_close = average_close
-                        close_change_percent = self.base_round(Decimal(0), 4) * 100
-
-                    # 如果前一交易日均交易额不为空，则计算当前交易日的均交易额涨跌幅
-                    if previous_amount != None:
-                        # 如果前一交易日的均交易额不为0，则计算涨跌幅
-                        if previous_amount != Decimal(0):
-                            amount_change_percent = self.base_round((average_amount - previous_amount) / previous_amount, 4) * 100
-                        # 如果前一交易日的均交易额为0，则设置涨跌幅为1，即100%
-                        else:
-                            amount_change_percent = self.base_round(Decimal(1), 4) * 100
-                    # 如果前一交易日均交易额为空，则设置前一日均交易量为当前均交易量，涨跌幅为0，即0%
-                    else:
-                        previous_amount = average_amount
-                        amount_change_percent = self.base_round(Decimal(0), 4) * 100
-
-                    # 如果前一交易日均交易量不为空，则计算当前交易日的均交易量涨跌幅
-                    if previous_vol != None:
-                        # 如果前一交易日的均交易额不为0，则计算涨跌幅
-                        if previous_vol != Decimal(0):
-                            vol_change_percent = self.base_round((average_vol - previous_vol) / previous_vol, 4) * 100
-                        # 如果前一交易日的均交易量为0，则设置涨跌幅为1，即100%
-                        else:
-                            vol_change_percent = self.base_round(Decimal(1), 4) * 100
-                    # 如果前一交易日均交易量为空，则设置前一日均交易量为当前均交易量，涨跌幅为0，即0%
-                    else:
-                        previous_vol = average_vol
-                        vol_change_percent = self.base_round(Decimal(0), 4) * 100
-                    upsert_sql = self.upsert
-                    upsert_sql = upsert_sql.format(security_code=self.quotes_surround(security_code),
-                                                   the_date=self.quotes_surround(the_date.strftime('%Y-%m-%d')),
+                    # 返回值list [the_date,
+                    # average_close, previous_close, close_change_percent,
+                    # average_amount, previous_amount, amount_change_percent,
+                    #  average_vol, previous_vol, vol_change_percent]
+                    list_data = self.analysis(temp_line_tuple, security_code, exchange_code, previous_data)
+                    upsert_sql = self.upsert.format(security_code=self.quotes_surround(security_code),
+                                                   the_date=self.quotes_surround(list_data[0].strftime('%Y-%m-%d')),
                                                    exchange_code=self.quotes_surround(exchange_code),
                                                    ma=self.ma,
-                                                   close=average_close,
-                                                   previous_close=previous_close,
-                                                   close_change_percent=close_change_percent,
-                                                   amount=average_amount,
-                                                   previous_amount=previous_amount,
-                                                   amount_change_percent=amount_change_percent,
-                                                   vol=average_vol,
-                                                   previous_vol=previous_vol,
-                                                   vol_change_percent=vol_change_percent
+                                                   close=list_data[1],
+                                                   previous_close=list_data[2],
+                                                   close_change_percent=list_data[3],
+                                                   amount=list_data[4],
+                                                   previous_amount=list_data[5],
+                                                   amount_change_percent=list_data[6],
+                                                   vol=list_data[7],
+                                                   previous_vol=list_data[8],
+                                                   vol_change_percent=list_data[9]
                                                    )
+                    # print(upsert_sql)
+                    # 将本次的处理结果重新赋值到previous_data中
+                    previous_data = [[list_data[2], list_data[5], list_data[8]]]
+
                     # 批量(100)提交数据更新
-                    if len(upsert_sql_list) == 3000:
+                    if len(upsert_sql_list) == 1000:
                         self.dbService.insert_many(upsert_sql_list)
                         process_line += '='
                         upsert_sql_list = []
@@ -309,16 +396,18 @@ class StockAverageLineService(BaseService):
                             processing = 1.0
                         else:
                             processing = self.base_round(Decimal(add_up) / Decimal(len_result - self.ma), 4) * 100
-                        self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]} {0[7]}%...',
-                                        [self.get_current_method_name(), self.ma, 'inner', security_code, exchange_code, len_result, process_line,
-                                         processing])
+
+                        batch_log_list = self.deepcopy_list(single_log_list)
+                        batch_log_list.append('inner')
+                        batch_log_list.append(add_up)
+                        batch_log_list.append(len_result)
+                        batch_log_list.append(process_line)
+                        batch_log_list.append(str(processing) + '%')
+                        self.logger.info(batch_log_list)
                     else:
-                        upsert_sql_list.append(upsert_sql)
+                        if upsert_sql is not None:
+                            upsert_sql_list.append(upsert_sql)
                     i += 1
-                    # 设置下一个切片的前一日均价为当前切片的均价，以备下一个切片计算涨跌幅使用
-                    previous_close = average_close
-                    previous_amount = average_amount
-                    previous_vol = average_vol
 
                 # 处理最后一批security_code的更新语句
                 if len(upsert_sql_list) > 0:
@@ -328,11 +417,23 @@ class StockAverageLineService(BaseService):
                         processing = 1.0
                     else:
                         processing = self.base_round(Decimal(add_up) / Decimal(len_result - self.ma), 4) * 100
-                    self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]} {0[7]}%',
-                                    [self.get_current_method_name(), self.ma, 'outer', security_code, exchange_code, len_result, process_line, processing])
+
+                    batch_log_list = self.deepcopy_list(single_log_list)
+                    batch_log_list.append('outer')
+                    batch_log_list.append(add_up)
+                    batch_log_list.append(len_result)
+                    batch_log_list.append(process_line)
+                    batch_log_list.append(str(processing) + '%')
+                    self.logger.info(batch_log_list)
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            self.base_error('{0[0]} {0[1]} {0[2]} {0[3]} {0[4]} {0[5]} {0[6]}',
-                            [self.get_current_method_name(), self.ma, security_code, exchange_code, exc_type, exc_value, exc_traceback])
-        self.base_debug('{0[0]} {0[1]} {0[2]} {0[3]} decline_ma_the_date {0[4]} 【end】',
-                       [self.get_current_method_name(), self.ma, security_code, exchange_code, decline_ma_the_date])
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            except_log_list = self.deepcopy_list(single_log_list)
+            except_log_list.append(exc_type)
+            except_log_list.append(exc_value)
+            except_log_list.append(exc_traceback)
+            self.logger.exception(except_log_list)
+
+        end_log_list = self.deepcopy_list(single_log_list)
+        end_log_list.append('【end】')
+        self.logger.info(end_log_list)

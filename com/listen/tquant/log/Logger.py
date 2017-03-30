@@ -35,11 +35,11 @@ class Logger():
         message = self.format_list(list)
         self.log.warn(message)
 
-    def error(self, message, list):
+    def error(self, list):
         message = self.format_list(list)
         self.log.error(message)
 
-    def exception(self, message, list):
+    def exception(self, list):
         message = self.format_list(list)
         self.log.error(message)
         logging.exception(message)
