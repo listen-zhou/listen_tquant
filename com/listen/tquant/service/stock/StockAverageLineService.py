@@ -116,7 +116,6 @@ class StockAverageLineService(BaseService):
                 security_code = None
                 exchange_code = None
                 for stock_item in tuple_security_codes:
-                    add_up += 1
                     # 股票代码
                     security_code = stock_item[0]
                     exchange_code = stock_item[1]
@@ -148,6 +147,7 @@ class StockAverageLineService(BaseService):
                         batch_log_list.append(process_line)
                         batch_log_list.append(str(processing) + '%')
                         self.logger.info(batch_log_list)
+                    add_up += 1
                 # 最后一批增量列表的处理进度打印
                 if add_up % 10 != 0:
                     process_line += '#'
@@ -353,10 +353,8 @@ class StockAverageLineService(BaseService):
                 # 前一日均值
                 previous_data = None
                 while i < len_result:
-                    add_up += 1
                     # 如果切片的下标是元祖的最后一个元素，则退出，因为已经处理完毕
                     if (i + self.ma) > len_result:
-                        add_up -= 1
                         break
                     temp_line_tuple = result[i:(i + self.ma)]
                     # 如果前一交易日的数据为空，则去查询一次
@@ -393,7 +391,7 @@ class StockAverageLineService(BaseService):
                         upsert_sql_list = []
                         upsert_sql_list.append(upsert_sql)
                         if len_result == self.ma:
-                            processing = 1.0
+                            processing = self.base_round(Decimal(1), 4) * 100
                         else:
                             processing = self.base_round(Decimal(add_up) / Decimal(len_result - self.ma), 4) * 100
 
@@ -408,13 +406,14 @@ class StockAverageLineService(BaseService):
                         if upsert_sql is not None:
                             upsert_sql_list.append(upsert_sql)
                     i += 1
+                    add_up += 1
 
                 # 处理最后一批security_code的更新语句
                 if len(upsert_sql_list) > 0:
                     self.dbService.insert_many(upsert_sql_list)
                     process_line += '='
                     if len_result == self.ma:
-                        processing = 1.0
+                        processing = self.base_round(Decimal(1), 4) * 100
                     else:
                         processing = self.base_round(Decimal(add_up) / Decimal(len_result - self.ma), 4) * 100
 

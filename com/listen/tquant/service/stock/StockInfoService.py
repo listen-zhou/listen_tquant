@@ -78,7 +78,6 @@ class StockInfoService(BaseService):
                 process_line = '='
                 len_indexes_values = len(indexes_values)
                 for idx in indexes_values:
-                    add_up += 1
                     try:
                         security_code = idx
                         security_name = stock_list.at[idx, 'name']
@@ -112,6 +111,7 @@ class StockInfoService(BaseService):
                         except_log_list.append(exc_value)
                         except_log_list.apend(exc_traceback)
                         self.logger.error(except_log_list)
+                    add_up += 1
                 if len(upsert_sql_list) > 0:
                     self.dbService.insert_many(upsert_sql_list)
                     process_line += '='

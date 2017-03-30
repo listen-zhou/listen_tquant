@@ -226,7 +226,6 @@ class StockDayKlineChangePercentService(BaseService):
         # 循环处理security_code的股票日K数据
         i = 0
         while i < len_result:
-            add_up += 1
             # 切片元组，每相连的2个一组
             section_idx = i + 2
             if section_idx > len_result:
@@ -258,11 +257,12 @@ class StockDayKlineChangePercentService(BaseService):
                 upsert_sql_list = []
                 if upsert_sql is not None:
                     upsert_sql_list.append(upsert_sql)
-                processing = self.base_round(Decimal(add_up) / Decimal(len_result), 4) * 100
+                # 这个地方为什么要add_up + 1？因为第一条数据不会被处理，所以总数会少一条，所以在计算进度的时候要+1
+                processing = self.base_round(Decimal(add_up + 1) / Decimal(len_result), 4) * 100
 
                 batch_log_list = self.deepcopy_list(single_log_list)
                 batch_log_list.append('inner')
-                batch_log_list.append(add_up)
+                batch_log_list.append(add_up + 1)
                 batch_log_list.append(len_result)
                 batch_log_list.append(process_line)
                 batch_log_list.append(str(processing) + '%')
@@ -271,14 +271,15 @@ class StockDayKlineChangePercentService(BaseService):
                 if upsert_sql is not None:
                     upsert_sql_list.append(upsert_sql)
             i += 1
+            add_up += 1
         # 处理最后一批security_code的更新语句
         if len(upsert_sql_list) > 0:
             self.dbService.insert_many(upsert_sql_list)
             process_line += '='
-            processing = self.base_round(Decimal(add_up) / Decimal(len_result), 4) * 100
+            processing = self.base_round(Decimal(add_up + 1) / Decimal(len_result), 4) * 100
             batch_log_list = self.deepcopy_list(single_log_list)
             batch_log_list.append('outer')
-            batch_log_list.append(add_up)
+            batch_log_list.append(add_up + 1)
             batch_log_list.append(len_result)
             batch_log_list.append(process_line)
             batch_log_list.append(str(processing) + '%')

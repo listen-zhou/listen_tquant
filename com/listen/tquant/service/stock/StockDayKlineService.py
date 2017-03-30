@@ -113,7 +113,6 @@ class StockDayKlineService(BaseService):
                     exchange_code = None
                     # time.sleep(2)
                     try:
-                        add_up += 1
                         # 股票代码
                         security_code = stock_item[0]
                         exchange_code = stock_item[1]
@@ -144,7 +143,6 @@ class StockDayKlineService(BaseService):
                                 continue
 
                         self.processing_single_security_code(security_codes_log_list, security_code, exchange_code, recent_few_days)
-
                         # 批量(10)列表的处理进度打印
                         if add_up % 10 == 0:
                             process_line += '#'
@@ -157,6 +155,7 @@ class StockDayKlineService(BaseService):
                             batch_log_list.append(process_line)
                             batch_log_list.append(str(processing) + '%')
                             self.logger.info(batch_log_list)
+                        add_up += 1
                     except Exception:
                         exc_type, exc_value, exc_traceback = sys.exc_info()
                         except_log_list = self.deepcopy_list(security_codes_log_list)
@@ -256,7 +255,6 @@ class StockDayKlineService(BaseService):
                 if indexes_values is not None:
                     len_indexes = len(indexes_values)
                     for idx in indexes_values:
-                        add_up += 1
                         # 解析股票日K数据（每行）
                         # 解析每行的返回值格式为list [the_date, amount, vol, open, high, low, close]
                         list_data = self.analysis_columns(single_log_list, result, idx)
@@ -296,6 +294,7 @@ class StockDayKlineService(BaseService):
                             self.logger.info(batch_log_list)
                         else:
                             upsert_sql_list.append(upsert_sql)
+                        add_up += 1
                     # 处理最后一批security_code的更新语句
                     if len(upsert_sql_list) > 0:
                         self.dbService.insert_many(upsert_sql_list)

@@ -266,7 +266,6 @@ class StockDeriveKlineService(BaseService):
         add_up = 0
         process_line = '='
         for group in calendar_group:
-            add_up += 1
             # 如果是增量处理模式，则需要找到增量的这个点的前一个K线的收盘价
             if kline_max_the_date is not None and kline_max_the_date != '':
                 # 如果不在group内，则说明还需要往后匹配
@@ -319,6 +318,7 @@ class StockDeriveKlineService(BaseService):
                     batch_log_list.append(process_line)
                     batch_log_list.append(str(processing) + '%')
                     self.logger.info(batch_log_list)
+            add_up += 1
         if len(upsert_sql_list) > 0:
             self.dbService.insert_many(upsert_sql_list)
             processing = self.base_round(Decimal(add_up) / Decimal(len(calendar_group)), 4) * 100

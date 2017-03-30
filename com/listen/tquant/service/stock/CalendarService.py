@@ -84,7 +84,6 @@ class CalendarService(BaseService):
             self.logger.info(calendar_log_list)
 
             for calendar in result:
-                add_up += 1
                 try:
                     # 交易日
                     the_date = calendar.date()
@@ -149,7 +148,7 @@ class CalendarService(BaseService):
                     except_log_list.append(exc_value)
                     except_log_list.apend(exc_traceback)
                     self.logger.error(except_log_list)
-
+                add_up += 1
             if len(upsert_sql_list) > 0:
                 self.dbService.insert_many(upsert_sql_list)
                 process_line += '='
