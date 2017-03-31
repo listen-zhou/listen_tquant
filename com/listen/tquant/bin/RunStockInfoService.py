@@ -13,10 +13,19 @@ from com.listen.tquant.service.stock.CalendarService import CalendarService
 from com.listen.tquant.dbservice.Service import DbService
 from com.listen.tquant.service.stock.StockDeriveKlineService import StockDeriveKlineService
 from com.listen.tquant.log.Logger import Logger
+
+import logging
+
+log_path = 'd:\\python_log\\stock_info'
+log_name = '\\list_tquant_stock_info.log'
+when = 'H'
+interval = 1
+backupCount = 10
+level = logging.INFO
+
 threads = []
 
-
-logger = Logger()
+logger = Logger(level, log_path, log_name, when, interval, backupCount)
 sleep_seconds = 120
 one_time = True
 

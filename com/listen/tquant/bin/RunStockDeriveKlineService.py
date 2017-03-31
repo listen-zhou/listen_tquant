@@ -5,7 +5,16 @@ from com.listen.tquant.service.stock.StockDeriveKlineService import StockDeriveK
 from com.listen.tquant.log.Logger import Logger
 import threading
 
-logger = Logger()
+import logging
+
+log_path = 'd:\\python_log\\derive_kline'
+log_name = '\\list_tquant_derive_kline.log'
+when = 'H'
+interval = 1
+backupCount = 10
+level = logging.INFO
+
+logger = Logger(level, log_path, log_name, when, interval, backupCount)
 sleep_seconds = 120
 one_time = False
 

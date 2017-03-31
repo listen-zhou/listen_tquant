@@ -1,6 +1,8 @@
 # coding: utf-8
 import threading
 
+import logging
+
 from com.listen.tquant.service.stock.CalendarService import CalendarService
 
 
@@ -8,7 +10,14 @@ from com.listen.tquant.dbservice.Service import DbService
 from com.listen.tquant.log.Logger import Logger
 threads = []
 
-logger = Logger()
+log_path = 'd:\\python_log\\calendar'
+log_name = '\\list_tquant_calendar.log'
+when = 'H'
+interval = 1
+backupCount = 10
+level = logging.INFO
+
+logger = Logger(level, log_path, log_name, when, interval, backupCount)
 sleep_seconds = 120
 one_time = True
 

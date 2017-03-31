@@ -8,10 +8,19 @@ from com.listen.tquant.service.stock.StockDayKlineChangePercentService import St
 
 from com.listen.tquant.dbservice.Service import DbService
 from com.listen.tquant.log.Logger import Logger
+import logging
+
 threads = []
 
 
-logger = Logger()
+log_path = 'd:\\python_log\\change_percent'
+log_name = '\\list_tquant_change_percent.log'
+when = 'H'
+interval = 1
+backupCount = 10
+level = logging.INFO
+
+logger = Logger(level, log_path, log_name, when, interval, backupCount)
 sleep_seconds = 120
 one_time = False
 

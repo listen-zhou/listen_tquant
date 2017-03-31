@@ -239,9 +239,9 @@ class StockDayKlineService(BaseService):
         # if security_code == '000505':
         try:
             if recent_few_days == 0:
-                result = tt.get_all_daybar(security_code, 'bfq')
+                result = tt.get_all_daybar(security_code, 'hfq')
             else:
-                result = tt.get_last_n_daybar(security_code, recent_few_days, 'bfq')
+                result = tt.get_last_n_daybar(security_code, recent_few_days, 'hfq')
             if result is not None and result.empty is False:
                 # 索引值为日期
                 indexes_values = result.index.values
@@ -379,12 +379,12 @@ class StockDayKlineService(BaseService):
             # amount的类型为numpy.ndarray，是一个多维数组，可能包含多个值，其他的字段也是一样，测试的时候发现有异常抛出
             if isinstance(amount, numpy.ndarray) and amount.size > 1:
                 amount = amount.tolist()[0]
-            amount = self.base_round(amount / 10000, 4)
+            amount = self.base_round(amount, 4)
 
             vol = day_kline.at[idx, 'vol']
             if isinstance(vol, numpy.ndarray) and vol.size > 1:
                 vol = vol.tolist()[0]
-            vol = self.base_round(vol / 1000000, 4)
+            vol = self.base_round(vol, 4)
 
             open = day_kline.at[idx, 'open']
             if isinstance(open, numpy.ndarray) and open.size > 1:
