@@ -78,6 +78,7 @@ class StockInfoService(BaseService):
                 process_line = '='
                 len_indexes_values = len(indexes_values)
                 for idx in indexes_values:
+                    add_up += 1
                     try:
                         security_code = idx
                         security_name = stock_list.at[idx, 'name']
@@ -93,7 +94,7 @@ class StockInfoService(BaseService):
                             self.dbService.insert_many(upsert_sql_list)
                             upsert_sql_list = []
                             process_line += '='
-                            processing = self.base_round(Decimal(add_up) / Decimal(len_indexes_values), 4) * 100
+                            processing = self.base_round(Decimal(add_up) / Decimal(len_indexes_values) * 100, 2)
                             upsert_sql_list.append(upsert_sql)
                             batch_log_list = self.deepcopy_list(processing_log_list)
                             batch_log_list.append('inner')
@@ -111,11 +112,10 @@ class StockInfoService(BaseService):
                         except_log_list.append(exc_value)
                         except_log_list.apend(exc_traceback)
                         self.logger.error(except_log_list)
-                    add_up += 1
                 if len(upsert_sql_list) > 0:
                     self.dbService.insert_many(upsert_sql_list)
                     process_line += '='
-                processing = self.base_round(Decimal(add_up) / Decimal(len_indexes_values), 4) * 100
+                processing = self.base_round(Decimal(add_up) / Decimal(len_indexes_values) * 100, 2)
                 batch_log_list = self.deepcopy_list(processing_log_list)
                 batch_log_list.append('outer')
                 batch_log_list.append(add_up)

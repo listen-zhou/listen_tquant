@@ -138,7 +138,7 @@ class StockDeriveKlineService(BaseService):
                         # 批量(10)列表的处理进度打印
                         if add_up % 10 == 0:
                             process_line += '#'
-                            processing = self.base_round(Decimal(add_up) / Decimal(len_result), 4) * 100
+                            processing = self.base_round(Decimal(add_up) / Decimal(len_result) * 100, 2)
                             batch_log_list = self.deepcopy_list(security_codes_log_list)
                             batch_log_list.append('inner')
                             batch_log_list.append(add_up)
@@ -158,14 +158,14 @@ class StockDeriveKlineService(BaseService):
                 # 最后一批增量列表的处理进度打印
                 if add_up % 10 != 0:
                     process_line += '#'
-                    processing = self.base_round(Decimal(add_up) / Decimal(len_result), 4) * 100
-                    batch_log_list = self.deepcopy_list(security_codes_log_list)
-                    batch_log_list.append('outer')
-                    batch_log_list.append(add_up)
-                    batch_log_list.append(len_result)
-                    batch_log_list.append(process_line)
-                    batch_log_list.append(str(processing) + '%')
-                    self.logger.info(batch_log_list)
+                processing = self.base_round(Decimal(add_up) / Decimal(len_result) * 100, 2)
+                batch_log_list = self.deepcopy_list(security_codes_log_list)
+                batch_log_list.append('outer')
+                batch_log_list.append(add_up)
+                batch_log_list.append(len_result)
+                batch_log_list.append(process_line)
+                batch_log_list.append(str(processing) + '%')
+                self.logger.info(batch_log_list)
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             exc_type, exc_value, exc_traceback = sys.exc_info()
@@ -176,11 +176,11 @@ class StockDeriveKlineService(BaseService):
             except_log_list.append(exc_value)
             except_log_list.append(exc_traceback)
             self.logger.exception(except_log_list)
-        start_log_list = self.deepcopy_list(security_codes_log_list)
-        start_log_list.append('tuple_security_codes size')
-        start_log_list.append(len_result)
-        start_log_list.append('【end】')
-        self.logger.info(start_log_list)
+        end_log_list = self.deepcopy_list(security_codes_log_list)
+        end_log_list.append('tuple_security_codes size')
+        end_log_list.append(len_result)
+        end_log_list.append('【end】')
+        self.logger.info(end_log_list)
 
     def get_calendar_group_by_kline_type(self):
         if self.kline_type == 'week':
@@ -309,7 +309,7 @@ class StockDeriveKlineService(BaseService):
                     self.dbService.insert_many(upsert_sql_list)
                     upsert_sql_list = []
                     process_line += '='
-                    processing = self.base_round(Decimal(add_up) / Decimal(len(calendar_group)), 4) * 100
+                    processing = self.base_round(Decimal(add_up) / Decimal(len(calendar_group)) * 100, 2)
 
                     batch_log_list = self.deepcopy_list(single_log_list)
                     batch_log_list.append('inner')
@@ -321,15 +321,15 @@ class StockDeriveKlineService(BaseService):
             add_up += 1
         if len(upsert_sql_list) > 0:
             self.dbService.insert_many(upsert_sql_list)
-            processing = self.base_round(Decimal(add_up) / Decimal(len(calendar_group)), 4) * 100
+        processing = self.base_round(Decimal(add_up) / Decimal(len(calendar_group)) * 100, 2)
 
-            batch_log_list = self.deepcopy_list(single_log_list)
-            batch_log_list.append('outer')
-            batch_log_list.append(add_up)
-            batch_log_list.append(len(calendar_group))
-            batch_log_list.append(process_line)
-            batch_log_list.append(str(processing) + '%')
-            self.logger.info(batch_log_list)
+        batch_log_list = self.deepcopy_list(single_log_list)
+        batch_log_list.append('outer')
+        batch_log_list.append(add_up)
+        batch_log_list.append(len(calendar_group))
+        batch_log_list.append(process_line)
+        batch_log_list.append(str(processing) + '%')
+        self.logger.info(batch_log_list)
         end_log_list = self.deepcopy_list(single_log_list)
         end_log_list.append('【end】')
         self.logger.info(end_log_list)
@@ -398,43 +398,43 @@ class StockDeriveKlineService(BaseService):
             if previous_close is not None:
                 # 如果前一交易日的均收盘价不为0，则计算涨跌幅
                 if previous_close != Decimal(0):
-                    close_change_percent = self.base_round((close - previous_close) / previous_close, 4) * 100
+                    close_change_percent = self.base_round((close - previous_close) / previous_close * 100, 2)
                 # 如果前一交易日的均收盘价为0，则设置涨跌幅为0
                 else:
-                    previous_close = self.base_round(Decimal(0), 4)
-                    close_change_percent = self.base_round(Decimal(0), 4)
+                    previous_close = self.base_round(Decimal(0), 2)
+                    close_change_percent = self.base_round(Decimal(0), 2)
             # 如果前一交易日均收盘价为空，则设置前一日均收盘价为当前均收盘价，涨跌幅为0，即0%
             else:
-                previous_close = self.base_round(Decimal(0), 4)
-                close_change_percent = self.base_round(Decimal(0), 4)
+                previous_close = self.base_round(Decimal(0), 2)
+                close_change_percent = self.base_round(Decimal(0), 2)
 
             # 如果前一交易日均交易额不为空，则计算当前交易日的均交易额涨跌幅
             if previous_amount is not None:
                 # 如果前一交易日的均交易额不为0，则计算涨跌幅
                 if previous_amount != Decimal(0):
-                    amount_change_percent = self.base_round((amount - previous_amount) / previous_amount, 4) * 100
+                    amount_change_percent = self.base_round((amount - previous_amount) / previous_amount * 100, 2)
                 # 如果前一交易日的均交易额为0，则设置涨跌幅为0
                 else:
-                    previous_amount = self.base_round(Decimal(0), 4)
-                    amount_change_percent = self.base_round(Decimal(0), 4)
+                    previous_amount = self.base_round(Decimal(0), 2)
+                    amount_change_percent = self.base_round(Decimal(0), 2)
             # 如果前一交易日均交易额为空，则设置前一日均交易量为当前均交易量，涨跌幅为0，即0%
             else:
-                previous_amount = self.base_round(Decimal(0), 4)
-                amount_change_percent = self.base_round(Decimal(0), 4)
+                previous_amount = self.base_round(Decimal(0), 2)
+                amount_change_percent = self.base_round(Decimal(0), 2)
 
             # 如果前一交易日均交易量不为空，则计算当前交易日的均交易量涨跌幅
             if previous_vol is not None:
                 # 如果前一交易日的均交易额不为0，则计算涨跌幅
                 if previous_vol != Decimal(0):
-                    vol_change_percent = self.base_round((vol - previous_vol) / previous_vol, 4) * 100
+                    vol_change_percent = self.base_round((vol - previous_vol) / previous_vol * 100, 2)
                 # 如果前一交易日的均交易量为0，则设置涨跌幅为0
                 else:
-                    previous_vol = self.base_round(Decimal(0), 4)
-                    vol_change_percent = self.base_round(Decimal(0), 4)
+                    previous_vol = self.base_round(Decimal(0), 2)
+                    vol_change_percent = self.base_round(Decimal(0), 2)
             # 如果前一交易日均交易量为空，则设置前一日均交易量为当前均交易量，涨跌幅为0，即0%
             else:
-                previous_vol = self.base_round(Decimal(0), 4)
-                vol_change_percent = self.base_round(Decimal(0), 4)
+                previous_vol = self.base_round(Decimal(0), 2)
+                vol_change_percent = self.base_round(Decimal(0), 2)
             return [the_date, open, high, low,
                     close, previous_close, close_change_percent,
                     amount, previous_amount, amount_change_percent,

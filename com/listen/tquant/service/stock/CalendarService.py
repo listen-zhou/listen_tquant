@@ -84,6 +84,7 @@ class CalendarService(BaseService):
             self.logger.info(calendar_log_list)
 
             for calendar in result:
+                add_up += 1
                 try:
                     # 交易日
                     the_date = calendar.date()
@@ -128,7 +129,7 @@ class CalendarService(BaseService):
                         self.dbService.insert_many(upsert_sql_list)
                         upsert_sql_list = []
                         process_line += '='
-                        processing = self.base_round(Decimal(add_up) / Decimal(len_result), 4) * 100
+                        processing = self.base_round(Decimal(add_up) / Decimal(len_result) * 100, 2)
                         upsert_sql_list.append(upsert_sql)
 
                         batch_log_list = self.deepcopy_list(processing_log_list)
@@ -148,11 +149,10 @@ class CalendarService(BaseService):
                     except_log_list.append(exc_value)
                     except_log_list.apend(exc_traceback)
                     self.logger.error(except_log_list)
-                add_up += 1
             if len(upsert_sql_list) > 0:
                 self.dbService.insert_many(upsert_sql_list)
                 process_line += '='
-            processing = self.base_round(Decimal(add_up) / Decimal(len_result), 4) * 100
+            processing = self.base_round(Decimal(add_up) / Decimal(len_result) * 100, 2)
 
             batch_log_list = self.deepcopy_list(processing_log_list)
             batch_log_list.append('outer')

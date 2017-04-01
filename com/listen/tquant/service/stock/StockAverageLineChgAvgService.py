@@ -12,12 +12,12 @@ from com.listen.tquant.service.BaseService import BaseService
 import time
 
 
-class StockAverageLineService(BaseService):
+class StockAverageLineChgAvgService(BaseService):
     """
-    股票均线数据处理服务
+    股票均线涨跌幅数据处理服务
     """
     def __init__(self, dbService, ma, logger, sleep_seconds, one_time):
-        super(StockAverageLineService, self).__init__(logger)
+        super(StockAverageLineChgAvgService, self).__init__(logger)
         self.ma = ma
         self.dbService = dbService
         self.sleep_seconds = sleep_seconds
@@ -36,35 +36,29 @@ class StockAverageLineService(BaseService):
         self.logger.info(init_log_list)
 
         self.query_stock_sql = "select security_code, exchange_code " \
-                               "from tquant_stock_day_kline " \
+                               "from tquant_stock_average_line " \
                                "group by security_code, exchange_code"
 
-        # 返回值list [the_date,
-        # close, close_avg, close_pre_avg, close_avg_chg,
-        # amount, amount_avg, amount_pre_avg, amount_avg_chg,
-        # vol, vol_avg, vol_pre_avg, vol_avg_chg,
-        # price_avg, price_pre_avg, price_avg_chg,
-        # amount_flow_chg, vol_flow_chg]
         self.upsert = 'insert into tquant_stock_average_line (security_code, the_date, exchange_code, ' \
                       'ma, ' \
-                      'close, close_avg, close_pre_avg, close_avg_chg, ' \
-                      'amount, amount_avg, amount_pre_avg, amount_avg_chg, ' \
-                      'vol, vol_avg, vol_pre_avg, vol_avg_chg, ' \
-                      'price_avg, price_pre_avg, price_avg_chg, ' \
-                      'amount_flow_chg, vol_flow_chg) ' \
+                      'close_avg_chg_avg, ' \
+                      'amount_avg_chg_avg, ' \
+                      'vol_avg_chg_avg, ' \
+                      'price_avg_chg_avg, ' \
+                      'amount_flow_chg_avg, vol_flow_chg_avg) ' \
                       'values ({security_code}, {the_date}, {exchange_code}, ' \
                       '{ma}, ' \
-                      '{close}, {close_avg}, {close_pre_avg}, {close_avg_chg}, ' \
-                      '{amount}, {amount_avg}, {amount_pre_avg}, {amount_avg_chg}, ' \
-                      '{vol}, {vol_avg}, {vol_pre_avg}, {vol_avg_chg}, ' \
-                      '{price_avg}, {price_pre_avg}, {price_avg_chg}, ' \
-                      '{amount_flow_chg}, {vol_flow_chg}) ' \
+                      '{close_avg_chg_avg}, ' \
+                      '{amount_avg_chg_avg}, ' \
+                      '{vol_avg_chg_avg}, ' \
+                      '{price_avg_chg_avg}, ' \
+                      '{amount_flow_chg_avg}, {vol_flow_chg_avg}) ' \
                       'on duplicate key update ' \
-                      'close=values(close), close_avg=values(close_avg), close_pre_avg=values(close_pre_avg), close_avg_chg=values(close_avg_chg), ' \
-                      'amount=values(amount), amount_avg=values(amount_avg), amount_pre_avg=values(amount_pre_avg), amount_avg_chg=values(amount_avg_chg), ' \
-                      'vol=values(vol), vol_avg=values(vol_avg), vol_pre_avg=values(vol_pre_avg), vol_avg_chg=values(vol_avg_chg), ' \
-                      'price_avg=values(price_avg), price_pre_avg=values(price_pre_avg), price_avg_chg=values(price_avg_chg), ' \
-                      'amount_flow_chg=values(amount_flow_chg), vol_flow_chg=values(vol_flow_chg) '
+                      'close_avg_chg_avg=values(close_avg_chg_avg), ' \
+                      'amount_avg_chg_avg=values(amount_avg_chg_avg), ' \
+                      'vol_avg_chg_avg=values(vol_avg_chg_avg), ' \
+                      'price_avg_chg_avg=values(price_avg_chg_avg), ' \
+                      'amount_flow_chg_avg=values(amount_flow_chg_avg), vol_flow_chg_avg=values(vol_flow_chg_avg) '
 
     def loop(self):
         loop_log_list = self.deepcopy_list(self.log_list)
@@ -125,8 +119,6 @@ class StockAverageLineService(BaseService):
                 add_up = 0
                 # 需要处理的股票代码进度打印字符
                 process_line = '#'
-                security_code = None
-                exchange_code = None
                 for stock_item in tuple_security_codes:
                     add_up += 1
                     # 股票代码
@@ -188,17 +180,6 @@ class StockAverageLineService(BaseService):
         end_log_list.append('【end】')
         self.logger.info(end_log_list)
 
-    def get_previous_data(self, security_code, exchange_code, the_date):
-        sql = "select close, amount, vol, price_avg from tquant_stock_average_line " \
-              "where security_code = {security_code} " \
-              "and exchange_code = {exchange_code} and ma = {ma} and the_date < {the_date} " \
-              "order by the_date desc limit 1".format(security_code=self.quotes_surround(security_code),
-                                                      exchange_code=self.quotes_surround(exchange_code),
-                                                      ma=self.ma,
-                                                      the_date=self.quotes_surround(the_date.strftime('%Y-%m-%d')))
-        previous_data = self.dbService.query(sql)
-        return previous_data
-
     def get_calendar_max_the_date(self):
         """
         查询交易日表中最大交易日日期
@@ -215,7 +196,13 @@ class StockAverageLineService(BaseService):
         sql = "select max(the_date) max_the_date from tquant_stock_average_line " \
               "where security_code = {security_code} " \
               "and exchange_code = {exchange_code} " \
-              "and ma = {ma}"
+              "and ma = {ma} " \
+              "and close_avg_chg is not null " \
+              "and amount_avg_chg is not null " \
+              "and vol_avg_chg is not null " \
+              "and price_avg_chg is not null " \
+              "and amount_flow_chg is not null " \
+              "and vol_flow_chg is not null "
         the_date = self.dbService.query(sql.format(security_code=self.quotes_surround(security_code),
                                                    exchange_code=self.quotes_surround(exchange_code),
                                                    ma=self.ma))
@@ -239,11 +226,19 @@ class StockAverageLineService(BaseService):
         return None
 
     def get_stock_day_kline(self, security_code, exchange_code, decline_ma_the_date):
-        sql = "select the_date, close, amount, vol " \
-              "from tquant_stock_day_kline " \
+        sql = "select the_date, " \
+              "close_avg_chg, amount_avg_chg, vol_avg_chg, " \
+              "price_avg_chg, amount_flow_chg, vol_flow_chg " \
+              "from tquant_stock_average_line " \
               "where security_code = {security_code} " \
               "and exchange_code = {exchange_code} " \
-              "and close is not null and close > 0 "
+              "and ma = {ma} " \
+              "and close_avg_chg is not null " \
+              "and amount_avg_chg is not null " \
+              "and vol_avg_chg is not null " \
+              "and price_avg_chg is not null " \
+              "and amount_flow_chg is not null " \
+              "and vol_flow_chg is not null "
         max_the_date = None
         if decline_ma_the_date is not None:
             sql += "and the_date >= {max_the_date} "
@@ -251,83 +246,49 @@ class StockAverageLineService(BaseService):
         sql += "order by the_date asc "
         sql = sql.format(security_code=self.quotes_surround(security_code),
                          exchange_code=self.quotes_surround(exchange_code),
-                         max_the_date=self.quotes_surround(max_the_date))
+                         max_the_date=self.quotes_surround(max_the_date),
+                         ma=self.ma
+                         )
         result = self.dbService.query(sql)
         return result
 
-    def analysis(self, temp_line_tuple, security_code, exchange_code, previous_data):
+    def analysis(self, temp_line_tuple, security_code, exchange_code):
 
-        # 前一ma日均收盘价，默认值为0，便于写入数据库
-        close_pre_avg = Decimal(0)
-        # 前一ma日均成交额(元)
-        amount_pre_avg = Decimal(0)
-        # 前一ma日均成交量(手)
-        vol_pre_avg = Decimal(0)
-        # 前一ma日均成交价
-        price_pre_avg = Decimal(0)
-        if previous_data is not None and len(previous_data) > 0:
-            close_pre_avg = previous_data[0][0]
-            amount_pre_avg = previous_data[0][1]
-            vol_pre_avg = previous_data[0][2]
-            price_pre_avg = previous_data[0][3]
-
-        # temp_line_tuple中的数据为the_date, close, amount, vol
+        # temp_line_tuple中的数据为the_date, close_avg_chg, amount_avg_chg,
+        # vol_avg_chg, price_avg_chg, amount_flow_chg, vol_flow_chg
         # 当日the_date为正序排序最后一天的the_date，第一个元素
         the_date = temp_line_tuple[self.ma - 1][0]
         # 将元组元素转换为列表元素
         # temp_items = [item for item in temp_line_tuple[0:]]
 
-        # 当日收盘价=正序排序最后一天的收盘价，最后一个元素的第2个元素
-        close = temp_line_tuple[self.ma - 1][1]
-        # ma日均收盘价=sum(前ma日(含)的收盘价)/ma
-        close_list = [close for close in [item[1] for item in temp_line_tuple]]
-        close_avg = self.base_round(self.average(close_list), 2)
-        # ma日均收盘价涨跌幅=(ma日均收盘价 - 前一ma日均收盘价)/前一ma日均收盘价 * 100
-        # 默认值为0
-        close_avg_chg = self.base_round(Decimal(0), 2)
-        if close_pre_avg is not None and close_pre_avg != Decimal(0):
-            close_avg_chg = self.base_round((close_avg - close_pre_avg) / close_pre_avg * 100, 2)
+        # ma日均收盘价涨跌幅均=sum(前ma日(含)均收盘价涨跌幅)/ma
+        close_avg_chg_list = [close_avg_chg for close_avg_chg in [item[1] for item in temp_line_tuple]]
+        close_avg_chg_avg = self.base_round(self.average(close_avg_chg_list), 2)
 
-        # 当日成交额
-        amount = temp_line_tuple[self.ma - 1][2]
-        # ma日均成交额=sum(前ma日(含)的成交额)/ma
-        amount_list = [amount for amount in [item[2] for item in temp_line_tuple]]
-        amount_avg = self.base_round(self.average(amount_list), 2)
-        # ma日均成交额涨跌幅=(ma日均成交额 - 前一ma日均成交额)/前一ma日均成交额 * 100
-        # 默认值为0
-        amount_avg_chg = Decimal(0)
-        if amount_pre_avg is not None and amount_pre_avg != Decimal(0):
-            amount_avg_chg = self.base_round((amount_avg - amount_pre_avg) / amount_pre_avg * 100, 2)
+        # ma日均成交额涨跌幅均=sum(前ma日(含)均成交额涨跌幅)/ma
+        amount_avg_chg_list = [amount_avg_chg for amount_avg_chg in [item[2] for item in temp_line_tuple]]
+        amount_avg_chg_avg = self.base_round(self.average(amount_avg_chg_list), 2)
 
-        # 当日成交量
-        vol = temp_line_tuple[self.ma - 1][3]
-        # ma日均成交量=sum(前ma日(含)的成交量)/ma
-        vol_list = [vol for vol in [item[3] for item in temp_line_tuple]]
-        vol_avg = self.base_round(self.average(vol_list), 2)
-        # ma日均成交量涨跌幅=(ma日均成交量 - 前一ma日均成交量)/前一ma日均成交量 * 100
-        vol_avg_chg = Decimal(0)
-        if vol_pre_avg is not None and vol_pre_avg != Decimal(0):
-            vol_avg_chg = self.base_round((vol_avg - vol_pre_avg) / vol_pre_avg * 100, 2)
+        # ma日均成交量涨跌幅均=sum(前ma日(含)均成交量涨跌幅)/ma
+        vol_avg_chg_list = [vol_avg_chg for vol_avg_chg in [item[3] for item in temp_line_tuple]]
+        vol_avg_chg_avg = self.base_round(self.average(vol_avg_chg_list), 2)
 
-        # ma日均成交价=sum(前ma日(含)的成交额)/sum(ma日(含)的成交量)
-        price_avg = self.base_round(self.sum(amount_list) / self.sum(vol_list), 2)
-        # ma日均成交价涨跌幅=(ma日均成交价 - 前一ma日均成交价)/前一ma日均成交价 * 100
-        price_avg_chg = Decimal(0)
-        if price_pre_avg is not None and price_pre_avg != Decimal(0):
-            price_avg_chg = self.base_round((price_avg - price_pre_avg) / price_pre_avg * 100, 2)
+        # ma日均成交价涨跌幅均=sum(前ma日(含)均成交价涨跌幅)/ma
+        price_avg_chg_list = [price_avg_chg for price_avg_chg in [item[4] for item in temp_line_tuple]]
+        price_avg_chg_avg = self.base_round(self.average(price_avg_chg_list), 2)
 
-        # 日金钱流向涨跌幅=日成交额/ma日(含)均成交额 * 100
-        amount_flow_chg = self.base_round(amount / amount_avg * 100, 2)
+        # 日金钱流向涨跌幅均=sum(前ma日(含)金钱流向涨跌幅)/ma
+        amount_flow_chg_list = [amount_flow_chg for amount_flow_chg in [item[5] for item in temp_line_tuple]]
+        amount_flow_chg_avg = self.base_round(self.average(amount_flow_chg_list), 2)
 
-        # 日成交量流向涨跌幅=日成交量/ma日(含)均成交量 * 100
-        vol_flow_chg = self.base_round(vol / vol_avg * 100, 2)
+        # 日成交量流向涨跌幅均=sum(前ma日(含)成交量流向涨跌幅)/ma
+        vol_flow_chg_list = [vol_flow_chg for vol_flow_chg in [item[5] for item in temp_line_tuple]]
+        vol_flow_chg_avg = self.base_round(self.average(vol_flow_chg_list), 2)
+
 
         return [the_date,
-                close, close_avg, close_pre_avg, close_avg_chg,
-                amount, amount_avg, amount_pre_avg, amount_avg_chg,
-                vol, vol_avg, vol_pre_avg, vol_avg_chg,
-                price_avg, price_pre_avg, price_avg_chg,
-                amount_flow_chg, vol_flow_chg]
+                close_avg_chg_avg, amount_avg_chg_avg, vol_avg_chg_avg,
+                price_avg_chg_avg, amount_flow_chg_avg, vol_flow_chg_avg]
 
 
     def processing_single_security_code(self, security_codes_log_list, security_code, exchange_code, decline_ma_the_date):
@@ -366,11 +327,6 @@ class StockAverageLineService(BaseService):
                 process_line = '='
                 # 循环处理security_code的股票日K数据
                 i = 0
-                # 由于是批量提交数据，所以在查询前一日均价时，有可能还未提交，
-                # 所以只在第一次的时候查询，其他的情况用前一次计算的均价作为前一日均价
-                # is_first就是是否第一次需要查询的标识
-                # 前一日均值
-                previous_data = None
                 while i < len_result:
                     add_up += 1
                     # 如果切片的下标是元祖的最后一个元素，则退出，因为已经处理完毕
@@ -378,46 +334,23 @@ class StockAverageLineService(BaseService):
                         add_up -= 1
                         break
                     temp_line_tuple = result[i:(i + self.ma)]
-                    # 如果前一交易日的数据为空，则去查询一次
-                    if previous_data is None or len(previous_data) == 0:
-                        the_date = temp_line_tuple[self.ma - 1][0]
-                        previous_data = self.get_previous_data(security_code, exchange_code, the_date)
-                    # 返回值list [the_date,
-                        # close, close_avg, close_pre_avg, close_avg_chg,
-                        # amount, amount_avg, amount_pre_avg, amount_avg_chg,
-                        # vol, vol_avg, vol_pre_avg, vol_avg_chg,
-                        # price_avg, price_pre_avg, price_avg_chg,
-                        # amount_flow_chg, vol_flow_chg]
-                    list_data = self.analysis(temp_line_tuple, security_code, exchange_code, previous_data)
+
+                    # 返回值list_data list [the_date,
+                    # close_avg_chg_avg, amount_avg_chg_avg, vol_avg_chg_avg,
+                    # price_avg_chg_avg, amount_flow_chg_avg, vol_flow_chg_avg]
+                    list_data = self.analysis(temp_line_tuple, security_code, exchange_code)
                     upsert_sql = self.upsert.format(security_code=self.quotes_surround(security_code),
                                                     the_date=self.quotes_surround(list_data[0].strftime('%Y-%m-%d')),
                                                     exchange_code=self.quotes_surround(exchange_code),
                                                     ma=self.ma,
-                                                    close=list_data[1],
-                                                    close_avg=list_data[2],
-                                                    close_pre_avg=list_data[3],
-                                                    close_avg_chg=list_data[4],
-
-                                                    amount=list_data[5],
-                                                    amount_avg=list_data[6],
-                                                    amount_pre_avg=list_data[7],
-                                                    amount_avg_chg=list_data[8],
-
-                                                    vol=list_data[9],
-                                                    vol_avg=list_data[10],
-                                                    vol_pre_avg=list_data[11],
-                                                    vol_avg_chg=list_data[12],
-
-                                                    price_avg=list_data[13],
-                                                    price_pre_avg=list_data[14],
-                                                    price_avg_chg=list_data[15],
-
-                                                    amount_flow_chg=list_data[16],
-                                                    vol_flow_chg=list_data[17]
+                                                    close_avg_chg_avg=list_data[1],
+                                                    amount_avg_chg_avg=list_data[2],
+                                                    vol_avg_chg_avg=list_data[3],
+                                                    price_avg_chg_avg=list_data[4],
+                                                    amount_flow_chg_avg=list_data[5],
+                                                    vol_flow_chg_avg=list_data[6]
                                                    )
                     # print(upsert_sql)
-                    # 将本次的处理结果重新赋值到previous_data中
-                    previous_data = [[list_data[2], list_data[6], list_data[11], list_data[13]]]
 
                     # 批量(100)提交数据更新
                     if len(upsert_sql_list) == 1000:

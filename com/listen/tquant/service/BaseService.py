@@ -30,24 +30,32 @@ class BaseService():
     def get_clsss_name(self):
         return self.__class__.__name__
 
-    def average(self, list):
-        if list != None and len(list) > 0:
+    def sum(self, list):
+        if list is not None and len(list) > 0:
             total = Decimal(0)
             for item in list:
-                if item != None:
+                if item is not None:
                     total += item
-            average = total / Decimal(len(list))
-            return average
+            return total
+        return None
+
+    def average(self, list):
+        if list is not None and len(list) > 0:
+            total = self.sum(list)
+            if total is not None:
+                average = total / Decimal(len(list))
+                return average
+            return None
         return None
 
     def base_round(self, val, n):
-        if val != None:
+        if val is not None:
             val = Decimal(val, getcontext())
             return val.__round__(n)
         return None
 
     def quotes_surround(self, str):
-        if str != None:
+        if str is not None:
             return "'" + str + "'"
         return str
 

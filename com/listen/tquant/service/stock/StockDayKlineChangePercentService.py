@@ -120,7 +120,7 @@ class StockDayKlineChangePercentService(BaseService):
                         # 批量(10)列表的处理进度打印
                         if add_up % 10 == 0:
                             process_line += '#'
-                            processing = self.base_round(Decimal(add_up) / Decimal(len_result), 4) * 100
+                            processing = self.base_round(Decimal(add_up) / Decimal(len_result) * 100, 2)
 
                             batch_log_list = self.deepcopy_list(security_codes_log_list)
                             batch_log_list.append('inner')
@@ -142,15 +142,15 @@ class StockDayKlineChangePercentService(BaseService):
                 # 最后一批增量列表的处理进度打印
                 if add_up % 10 != 0:
                     process_line += '#'
-                    processing = self.base_round(Decimal(add_up) / Decimal(len_result), 4) * 100
+                processing = self.base_round(Decimal(add_up) / Decimal(len_result) * 100, 2)
 
-                    batch_log_list = self.deepcopy_list(security_codes_log_list)
-                    batch_log_list.append('outer')
-                    batch_log_list.append(add_up)
-                    batch_log_list.append(len_result)
-                    batch_log_list.append(process_line)
-                    batch_log_list.append(str(processing) + '%')
-                    self.logger.info(batch_log_list)
+                batch_log_list = self.deepcopy_list(security_codes_log_list)
+                batch_log_list.append('outer')
+                batch_log_list.append(add_up)
+                batch_log_list.append(len_result)
+                batch_log_list.append(process_line)
+                batch_log_list.append(str(processing) + '%')
+                self.logger.info(batch_log_list)
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             except_log_list = self.deepcopy_list(processing_log_list)
@@ -258,7 +258,7 @@ class StockDayKlineChangePercentService(BaseService):
                 if upsert_sql is not None:
                     upsert_sql_list.append(upsert_sql)
                 # 这个地方为什么要add_up + 1？因为第一条数据不会被处理，所以总数会少一条，所以在计算进度的时候要+1
-                processing = self.base_round(Decimal(add_up + 1) / Decimal(len_result), 4) * 100
+                processing = self.base_round(Decimal(add_up + 1) / Decimal(len_result) * 100, 2)
 
                 batch_log_list = self.deepcopy_list(single_log_list)
                 batch_log_list.append('inner')
@@ -276,14 +276,14 @@ class StockDayKlineChangePercentService(BaseService):
         if len(upsert_sql_list) > 0:
             self.dbService.insert_many(upsert_sql_list)
             process_line += '='
-            processing = self.base_round(Decimal(add_up + 1) / Decimal(len_result), 4) * 100
-            batch_log_list = self.deepcopy_list(single_log_list)
-            batch_log_list.append('outer')
-            batch_log_list.append(add_up + 1)
-            batch_log_list.append(len_result)
-            batch_log_list.append(process_line)
-            batch_log_list.append(str(processing) + '%')
-            self.logger.info(batch_log_list)
+        processing = self.base_round(Decimal(add_up + 1) / Decimal(len_result) * 100, 2)
+        batch_log_list = self.deepcopy_list(single_log_list)
+        batch_log_list.append('outer')
+        batch_log_list.append(add_up + 1)
+        batch_log_list.append(len_result)
+        batch_log_list.append(process_line)
+        batch_log_list.append(str(processing) + '%')
+        self.logger.info(batch_log_list)
 
         end_log_list = self.deepcopy_list(single_log_list)
         end_log_list.append('【end】')
@@ -336,24 +336,24 @@ class StockDayKlineChangePercentService(BaseService):
             # 涨跌幅(百分比)计算:当日(收盘价-前一日收盘价)/前一日收盘价 * 100
             close_change_percent = None
             if close1 is not None and close1 != Decimal(0):
-                close_change_percent = self.base_round(((close2 - close1) / close1), 4) * 100
+                close_change_percent = self.base_round(((close2 - close1) / close1) * 100, 2)
             else:
-                close1 = self.base_round(Decimal(0), 4)
-                close_change_percent = self.base_round(Decimal(0), 4)
+                close1 = self.base_round(Decimal(0), 2)
+                close_change_percent = self.base_round(Decimal(0), 2)
 
             amount_change_percent = None
             if amount1 is not None and amount1 != Decimal(0):
-                amount_change_percent = self.base_round(((amount2 - amount1) / amount1), 4) * 100
+                amount_change_percent = self.base_round(((amount2 - amount1) / amount1) * 100, 2)
             else:
-                amount1 = self.base_round(Decimal(0), 4)
-                amount_change_percent = self.base_round(Decimal(0), 4)
+                amount1 = self.base_round(Decimal(0), 2)
+                amount_change_percent = self.base_round(Decimal(0), 2)
 
             vol_change_percent = None
             if vol1 is not None and vol1 != Decimal(0):
-                vol_change_percent = self.base_round(((vol2 - vol1) / vol1), 4) * 100
+                vol_change_percent = self.base_round(((vol2 - vol1) / vol1) * 100, 2)
             else:
-                vol1 = self.base_round(Decimal(0), 4)
-                vol_change_percent = self.base_round(Decimal(0), 4)
+                vol1 = self.base_round(Decimal(0), 2)
+                vol_change_percent = self.base_round(Decimal(0), 2)
 
             return [the_date, close1, close_change_percent, amount1, amount_change_percent, vol1, vol_change_percent]
         except Exception:

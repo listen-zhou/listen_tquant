@@ -64,12 +64,23 @@ one_time = False
 #     return threads
 ######################################################################################
 
-mas = [3, 5, 10, 20, 30, 60, 120, 250]
+# mas = [3, 5, 10, 20, 30, 60, 120, 250]
+mas = [3, 5, 10]
 # mas = [5]
+security_codes_log_list = None
+security_code = '002460'
+# security_code = '002466'
+exchange_code = 'SZ'
+
+security_code = '600519'
+exchange_code = 'SH'
+
+decline_ma_the_date = None
 for ma in mas:
     dbService5 = DbService()
     stockAverageLineService5 = StockAverageLineService(dbService5, ma, logger, sleep_seconds, one_time)
-    stockAverageLineServiceThread5 = threading.Thread(target=stockAverageLineService5.loop)
+    stockAverageLineServiceThread5 = threading.Thread(target=stockAverageLineService5.processing_single_security_code,
+                                                      args=(security_codes_log_list, security_code, exchange_code, decline_ma_the_date))
     stockAverageLineServiceThread5.setName('stockAverageLineServiceThread-ma-' + str(ma))
     threads.append(stockAverageLineServiceThread5)
 

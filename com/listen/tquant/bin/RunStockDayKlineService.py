@@ -12,7 +12,7 @@ from com.listen.tquant.log.Logger import Logger
 
 import logging
 
-batch_num = 11
+batch_num = 7
 
 log_path = 'd:\\python_log\\day_kline'
 log_name = '\\list_tquant_day_kline'+str(batch_num + 1)+'.log'
@@ -46,7 +46,7 @@ batch_list = []
 if tuple_security_codes is not None and len(tuple_security_codes) > 0:
     size = len(tuple_security_codes)
     # 分组的批量大小
-    batch = 300
+    batch = 500
     # 分组后余数
     remainder = size % batch
     if remainder > 0:

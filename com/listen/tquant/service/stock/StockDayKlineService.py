@@ -109,8 +109,11 @@ class StockDayKlineService(BaseService):
                 # 需要处理的股票代码进度打印字符
                 process_line = '#'
                 for stock_item in tuple_security_codes:
+                    add_up += 1
+
                     security_code = None
                     exchange_code = None
+
                     # time.sleep(2)
                     try:
                         # 股票代码
@@ -144,9 +147,10 @@ class StockDayKlineService(BaseService):
 
                         self.processing_single_security_code(security_codes_log_list, security_code, exchange_code, recent_few_days)
                         # 批量(10)列表的处理进度打印
+
                         if add_up % 10 == 0:
                             process_line += '#'
-                            processing = self.base_round(Decimal(add_up) / Decimal(len_result), 4) * 100
+                            processing = self.base_round(Decimal(add_up) / Decimal(len_result) * 100, 2)
                             
                             batch_log_list = self.deepcopy_list(security_codes_log_list)
                             batch_log_list.append('inner')
@@ -155,7 +159,6 @@ class StockDayKlineService(BaseService):
                             batch_log_list.append(process_line)
                             batch_log_list.append(str(processing) + '%')
                             self.logger.info(batch_log_list)
-                        add_up += 1
                     except Exception:
                         exc_type, exc_value, exc_traceback = sys.exc_info()
                         except_log_list = self.deepcopy_list(security_codes_log_list)
@@ -169,15 +172,15 @@ class StockDayKlineService(BaseService):
                 # 最后一批增量列表的处理进度打印
                 if add_up % 10 != 0:
                     process_line += '#'
-                    processing = self.base_round(Decimal(add_up) / Decimal(len_result), 4) * 100
-                    
-                    batch_log_list = self.deepcopy_list(security_codes_log_list)
-                    batch_log_list.append('outer')
-                    batch_log_list.append(add_up)
-                    batch_log_list.append(len_result)
-                    batch_log_list.append(process_line)
-                    batch_log_list.append(str(processing) + '%')
-                    self.logger.info(batch_log_list)
+                processing = self.base_round(Decimal(add_up) / Decimal(len_result) * 100, 2)
+
+                batch_log_list = self.deepcopy_list(security_codes_log_list)
+                batch_log_list.append('outer')
+                batch_log_list.append(add_up)
+                batch_log_list.append(len_result)
+                batch_log_list.append(process_line)
+                batch_log_list.append(str(processing) + '%')
+                self.logger.info(batch_log_list)
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             except_log_list = self.deepcopy_list(security_codes_log_list)
@@ -238,10 +241,19 @@ class StockDayKlineService(BaseService):
         # 所以为了处理这个不同类型的情况，做了判断和检测测试
         # if security_code == '000505':
         try:
-            if recent_few_days == 0:
-                result = tt.get_all_daybar(security_code, 'hfq')
-            else:
-                result = tt.get_last_n_daybar(security_code, recent_few_days, 'hfq')
+            result = None
+            try:
+                if recent_few_days == 0:
+                    result = tt.get_all_daybar(security_code, 'hfq')
+                else:
+                    result = tt.get_last_n_daybar(security_code, recent_few_days, 'hfq')
+            except Exception:
+                exc_type, exc_value, exc_traceback = sys.exc_info()
+                except_log_list = self.deepcopy_list(single_log_list)
+                except_log_list.append(exc_type)
+                except_log_list.append(exc_value)
+                except_log_list.append(exc_traceback)
+                self.logger.exception(except_log_list)
             if result is not None and result.empty is False:
                 # 索引值为日期
                 indexes_values = result.index.values
@@ -255,6 +267,7 @@ class StockDayKlineService(BaseService):
                 if indexes_values is not None:
                     len_indexes = len(indexes_values)
                     for idx in indexes_values:
+                        add_up += 1
                         # 解析股票日K数据（每行）
                         # 解析每行的返回值格式为list [the_date, amount, vol, open, high, low, close]
                         list_data = self.analysis_columns(single_log_list, result, idx)
@@ -284,7 +297,7 @@ class StockDayKlineService(BaseService):
                             upsert_sql_list = []
                             if upsert_sql is not None:
                                 upsert_sql_list.append(upsert_sql)
-                            processing = self.base_round(Decimal(add_up) / Decimal(len_indexes), 4) * 100
+                            processing = self.base_round(Decimal(add_up) / Decimal(len_indexes) * 100, 2)
                             batch_log_list = self.deepcopy_list(single_log_list)
                             batch_log_list.append('inner')
                             batch_log_list.append(add_up)
@@ -294,20 +307,20 @@ class StockDayKlineService(BaseService):
                             self.logger.info(batch_log_list)
                         else:
                             upsert_sql_list.append(upsert_sql)
-                        add_up += 1
                     # 处理最后一批security_code的更新语句
                     if len(upsert_sql_list) > 0:
                         self.dbService.insert_many(upsert_sql_list)
                         process_line += '='
-                        processing = self.base_round(Decimal(add_up) / Decimal(len(indexes_values)), 4) * 100
 
-                        batch_log_list = self.deepcopy_list(single_log_list)
-                        batch_log_list.append('outer')
-                        batch_log_list.append(add_up)
-                        batch_log_list.append(len_indexes)
-                        batch_log_list.append(process_line)
-                        batch_log_list.append(str(processing) + '%')
-                        self.logger.info(batch_log_list)
+                    processing = self.base_round(Decimal(add_up) / Decimal(len(indexes_values)) * 100, 2)
+
+                    batch_log_list = self.deepcopy_list(single_log_list)
+                    batch_log_list.append('outer')
+                    batch_log_list.append(add_up)
+                    batch_log_list.append(len_indexes)
+                    batch_log_list.append(process_line)
+                    batch_log_list.append(str(processing) + '%')
+                    self.logger.info(batch_log_list)
                 else:
                     warn_log_list = self.deepcopy_list(single_log_list)
                     warn_log_list.append('recent_few_days')
@@ -379,32 +392,32 @@ class StockDayKlineService(BaseService):
             # amount的类型为numpy.ndarray，是一个多维数组，可能包含多个值，其他的字段也是一样，测试的时候发现有异常抛出
             if isinstance(amount, numpy.ndarray) and amount.size > 1:
                 amount = amount.tolist()[0]
-            amount = self.base_round(amount, 4)
+            amount = self.base_round(amount, 2)
 
             vol = day_kline.at[idx, 'vol']
             if isinstance(vol, numpy.ndarray) and vol.size > 1:
                 vol = vol.tolist()[0]
-            vol = self.base_round(vol, 4)
+            vol = self.base_round(vol, 2)
 
             open = day_kline.at[idx, 'open']
             if isinstance(open, numpy.ndarray) and open.size > 1:
                 open = open.tolist()[0]
-            open = self.base_round(open, 4)
+            open = self.base_round(open, 2)
 
             high = day_kline.at[idx, 'high']
             if isinstance(high, numpy.ndarray) and high.size > 1:
                 high = high.tolist()[0]
-            high = self.base_round(high, 4)
+            high = self.base_round(high, 2)
 
             low = day_kline.at[idx, 'low']
             if isinstance(low, numpy.ndarray) and low.size > 1:
                 low = low.tolist()[0]
-            low = self.base_round(low, 4)
+            low = self.base_round(low, 2)
 
             close = day_kline.at[idx, 'close']
             if isinstance(close, numpy.ndarray) and close.size > 1:
                 close = close.tolist()[0]
-            close = self.base_round(close, 4)
+            close = self.base_round(close, 2)
 
             return [the_date, amount, vol, open, high, low, close]
         except Exception:
