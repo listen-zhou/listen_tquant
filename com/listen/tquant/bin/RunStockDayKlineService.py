@@ -12,7 +12,7 @@ from com.listen.tquant.log.Logger import Logger
 
 import logging
 
-batch_num = 7
+batch_num = 6
 
 log_path = 'd:\\python_log\\day_kline'
 log_name = '\\list_tquant_day_kline'+str(batch_num + 1)+'.log'
@@ -59,9 +59,9 @@ if tuple_security_codes is not None and len(tuple_security_codes) > 0:
     while i < total:
         # 如果是最后一组，则取全量
         if i == total - 1:
-            temp_tuple = tuple_security_codes[i*batch:size]
+            temp_tuple = tuple_security_codes[i * batch:size]
         else:
-            temp_tuple = tuple_security_codes[i*batch:(i+1)*batch]
+            temp_tuple = tuple_security_codes[i * batch:(i + 1) * batch]
         batch_list.append(temp_tuple)
         i += 1
 #

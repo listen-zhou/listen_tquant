@@ -152,7 +152,7 @@ class StockAverageLineService(BaseService):
                     # 批量(10)列表的处理进度打印
                     if add_up % 10 == 0:
                         process_line += '#'
-                        processing = self.base_round(Decimal(add_up) / Decimal(len_result) * 100, 2)
+                        processing = self.base_round_zero(Decimal(add_up) / Decimal(len_result) * 100, 2)
                         batch_log_list = self.deepcopy_list(security_codes_log_list)
                         batch_log_list.append('inner')
                         batch_log_list.append(add_up)
@@ -163,7 +163,7 @@ class StockAverageLineService(BaseService):
                 # 最后一批增量列表的处理进度打印
                 if add_up % 10 != 0:
                     process_line += '#'
-                processing = self.base_round(Decimal(add_up) / Decimal(len_result) * 100, 2)
+                processing = self.base_round_zero(Decimal(add_up) / Decimal(len_result) * 100, 2)
                 batch_log_list = self.deepcopy_list(security_codes_log_list)
                 batch_log_list.append('outer')
                 batch_log_list.append(add_up)
@@ -281,46 +281,63 @@ class StockAverageLineService(BaseService):
         close = temp_line_tuple[self.ma - 1][1]
         # ma日均收盘价=sum(前ma日(含)的收盘价)/ma
         close_list = [close for close in [item[1] for item in temp_line_tuple]]
-        close_avg = self.base_round(self.average(close_list), 2)
+        close_avg = self.base_round_zero(self.average_zero(close_list), 2)
+        # 如果收盘ma日均价为None，则为异常数据，价格不可能为0
+        # if close_avg is None:
+        #     close_avg = Decimal(0)
         # ma日均收盘价涨跌幅=(ma日均收盘价 - 前一ma日均收盘价)/前一ma日均收盘价 * 100
         # 默认值为0
-        close_avg_chg = self.base_round(Decimal(0), 2)
-        if close_pre_avg is not None and close_pre_avg != Decimal(0):
-            close_avg_chg = self.base_round((close_avg - close_pre_avg) / close_pre_avg * 100, 2)
+        close_avg_chg = self.base_round_zero(Decimal(0), 2)
+        # if close_pre_avg is not None and close_pre_avg != Decimal(0):
+        #     close_avg_chg = self.base_round_zero(self.division_zero((close_avg - close_pre_avg), close_pre_avg) * 100, 2)
+        close_avg_chg = self.base_round_zero(self.division_zero((close_avg - close_pre_avg), close_pre_avg) * 100, 2)
 
         # 当日成交额
         amount = temp_line_tuple[self.ma - 1][2]
         # ma日均成交额=sum(前ma日(含)的成交额)/ma
         amount_list = [amount for amount in [item[2] for item in temp_line_tuple]]
-        amount_avg = self.base_round(self.average(amount_list), 2)
+        amount_avg = self.base_round_zero(self.average_zero(amount_list), 2)
+        # if amount_avg is None :
+        #     amount_avg = Decimal(0)
         # ma日均成交额涨跌幅=(ma日均成交额 - 前一ma日均成交额)/前一ma日均成交额 * 100
         # 默认值为0
         amount_avg_chg = Decimal(0)
-        if amount_pre_avg is not None and amount_pre_avg != Decimal(0):
-            amount_avg_chg = self.base_round((amount_avg - amount_pre_avg) / amount_pre_avg * 100, 2)
+        # if amount_pre_avg is not None and amount_pre_avg != Decimal(0):
+        #     amount_avg_chg = self.base_round_zero(self.division_zero((amount_avg - amount_pre_avg), amount_pre_avg) * 100, 2)
+        amount_avg_chg = self.base_round_zero(self.division_zero((amount_avg - amount_pre_avg), amount_pre_avg) * 100, 2)
 
         # 当日成交量
         vol = temp_line_tuple[self.ma - 1][3]
         # ma日均成交量=sum(前ma日(含)的成交量)/ma
         vol_list = [vol for vol in [item[3] for item in temp_line_tuple]]
-        vol_avg = self.base_round(self.average(vol_list), 2)
+        vol_avg = self.base_round_zero(self.average_zero(vol_list), 2)
+        # if vol_avg is None:
+        #     vol_avg = Decimal(0)
         # ma日均成交量涨跌幅=(ma日均成交量 - 前一ma日均成交量)/前一ma日均成交量 * 100
         vol_avg_chg = Decimal(0)
-        if vol_pre_avg is not None and vol_pre_avg != Decimal(0):
-            vol_avg_chg = self.base_round((vol_avg - vol_pre_avg) / vol_pre_avg * 100, 2)
+        # if vol_pre_avg is not None and vol_pre_avg != Decimal(0):
+        #     vol_avg_chg = self.base_round_zero(self.division_zero((vol_avg - vol_pre_avg), vol_pre_avg) * 100, 2)
+        vol_avg_chg = self.base_round_zero(self.division_zero((vol_avg - vol_pre_avg), vol_pre_avg) * 100, 2)
 
         # ma日均成交价=sum(前ma日(含)的成交额)/sum(ma日(含)的成交量)
-        price_avg = self.base_round(self.sum(amount_list) / self.sum(vol_list), 2)
+        price_avg = self.base_round_zero(self.division_zero(self.sum_zero(amount_list), self.sum_zero(vol_list)), 2)
+        # if price_avg is None:
+        #     price_avg = Decimal(0)
         # ma日均成交价涨跌幅=(ma日均成交价 - 前一ma日均成交价)/前一ma日均成交价 * 100
         price_avg_chg = Decimal(0)
-        if price_pre_avg is not None and price_pre_avg != Decimal(0):
-            price_avg_chg = self.base_round((price_avg - price_pre_avg) / price_pre_avg * 100, 2)
+        # if price_pre_avg is not None and price_pre_avg != Decimal(0):
+        #     price_avg_chg = self.base_round_zero(self.division_zero((price_avg - price_pre_avg), price_pre_avg) * 100, 2)
+        price_avg_chg = self.base_round_zero(self.division_zero((price_avg - price_pre_avg), price_pre_avg) * 100, 2)
 
         # 日金钱流向涨跌幅=日成交额/ma日(含)均成交额 * 100
-        amount_flow_chg = self.base_round(amount / amount_avg * 100, 2)
+        amount_flow_chg = self.base_round_zero(self.division_zero(amount, amount_avg) * 100, 2)
+        # if amount_flow_chg is None:
+        #     amount_flow_chg = Decimal(0)
 
         # 日成交量流向涨跌幅=日成交量/ma日(含)均成交量 * 100
-        vol_flow_chg = self.base_round(vol / vol_avg * 100, 2)
+        vol_flow_chg = self.base_round_zero(self.division_zero(vol, vol_avg) * 100, 2)
+        # if vol_flow_chg is None:
+        #     vol_flow_chg = Decimal(0)
 
         return [the_date,
                 close, close_avg, close_pre_avg, close_avg_chg,
@@ -426,9 +443,9 @@ class StockAverageLineService(BaseService):
                         upsert_sql_list = []
                         upsert_sql_list.append(upsert_sql)
                         if len_result == self.ma:
-                            processing = self.base_round(Decimal(1) * 100, 2)
+                            processing = self.base_round_zero(Decimal(1) * 100, 2)
                         else:
-                            processing = self.base_round(Decimal(add_up) / Decimal(len_result - self.ma + 1) * 100, 2)
+                            processing = self.base_round_zero(Decimal(add_up) / Decimal(len_result - self.ma + 1) * 100, 2)
 
                         batch_log_list = self.deepcopy_list(single_log_list)
                         batch_log_list.append('inner')
@@ -447,9 +464,9 @@ class StockAverageLineService(BaseService):
                     self.dbService.insert_many(upsert_sql_list)
                     process_line += '='
                 if len_result == self.ma:
-                    processing = self.base_round(Decimal(1) * 100, 2)
+                    processing = self.base_round_zero(Decimal(1) * 100, 2)
                 else:
-                    processing = self.base_round(Decimal(add_up) / Decimal(len_result - self.ma + 1) * 100, 2)
+                    processing = self.base_round_zero(Decimal(add_up) / Decimal(len_result - self.ma + 1) * 100, 2)
 
                 batch_log_list = self.deepcopy_list(single_log_list)
                 batch_log_list.append('outer')
