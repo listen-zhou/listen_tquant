@@ -33,10 +33,6 @@ class StockDeriveKlineService(BaseService):
         self.sleep_seconds = sleep_seconds
         self.one_time = one_time
 
-        self.query_stock_sql = "select security_code, exchange_code " \
-                               "from tquant_stock_day_kline " \
-                               "group by security_code, exchange_code"
-
         self.upsert = "insert into tquant_stock_derive_kline " \
                       "(security_code, the_date, exchange_code, kline_type, " \
                       "open, high, low, " \
@@ -97,7 +93,7 @@ class StockDeriveKlineService(BaseService):
         self.logger.info(start_log_list)
 
         # 需要处理的股票代码
-        result = self.dbService.query(self.query_stock_sql)
+        result = self.dbService.query_all_security_codes()
         self.processing_security_codes(processing_log_list, result, 'batch-0')
 
         end_log_list = self.deepcopy_list(processing_log_list)
@@ -149,7 +145,7 @@ class StockDeriveKlineService(BaseService):
                     except Exception:
                         exc_type, exc_value, exc_traceback = sys.exc_info()
                         exc_type, exc_value, exc_traceback = sys.exc_info()
-                        except_log_list = self.deepcopy_list(processing_log_list)
+                        except_log_list = self.deepcopy_list(security_codes_log_list)
                         except_log_list.append('inner')
                         except_log_list.append(exc_type)
                         except_log_list.append(exc_value)
@@ -170,7 +166,7 @@ class StockDeriveKlineService(BaseService):
             exc_type, exc_value, exc_traceback = sys.exc_info()
             exc_type, exc_value, exc_traceback = sys.exc_info()
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            except_log_list = self.deepcopy_list(processing_log_list)
+            except_log_list = self.deepcopy_list(security_codes_log_list)
             except_log_list.append('outer')
             except_log_list.append(exc_type)
             except_log_list.append(exc_value)

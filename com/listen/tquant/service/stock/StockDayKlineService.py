@@ -33,10 +33,6 @@ class StockDayKlineService(BaseService):
         init_log_list.append(one_time)
         self.logger.info(init_log_list)
 
-        self.query_stock_sql = "select a.security_code, a.exchange_code " \
-                               "from tquant_security_info a " \
-                               "where a.security_type = 'STOCK'"
-
         self.upsert = 'insert into tquant_stock_day_kline (security_code, the_date, exchange_code, ' \
                  'amount, vol, open, high, low, close) ' \
                  'values ({security_code}, {the_date}, {exchange_code}, ' \
@@ -73,7 +69,7 @@ class StockDayKlineService(BaseService):
         # 获取交易日表最大交易日日期，类型为date.datetime
         calendar_max_the_date = self.get_calendar_max_the_date()
         # 需要处理的股票代码
-        result = self.dbService.query(self.query_stock_sql)
+        result = self.dbService.query_all_security_codes()
         self.processing_security_codes(processing_log_list, result, calendar_max_the_date, 'batch-0')
 
         end_log_list = self.deepcopy_list(processing_log_list)

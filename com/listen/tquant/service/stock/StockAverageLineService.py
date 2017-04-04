@@ -35,16 +35,6 @@ class StockAverageLineService(BaseService):
         init_log_list.append(one_time)
         self.logger.info(init_log_list)
 
-        self.query_stock_sql = "select security_code, exchange_code " \
-                               "from tquant_stock_day_kline " \
-                               "group by security_code, exchange_code"
-
-        # 返回值list [the_date,
-        # close, close_avg, close_pre_avg, close_avg_chg,
-        # amount, amount_avg, amount_pre_avg, amount_avg_chg,
-        # vol, vol_avg, vol_pre_avg, vol_avg_chg,
-        # price_avg, price_pre_avg, price_avg_chg,
-        # amount_flow_chg, vol_flow_chg]
         self.upsert = 'insert into tquant_stock_average_line (security_code, the_date, exchange_code, ' \
                       'ma, ' \
                       'close, close_avg, close_pre_avg, close_avg_chg, ' \
@@ -94,7 +84,7 @@ class StockAverageLineService(BaseService):
         # 获取交易日表最大交易日日期，类型为date.datetime
         calendar_max_the_date = self.get_calendar_max_the_date()
         # 需要处理的股票代码，查询股票基本信息表 security_code, exchange_code
-        result = self.dbService.query(self.query_stock_sql)
+        result = self.dbService.query_all_security_codes()
         self.processing_security_codes(processing_log_list, result, calendar_max_the_date, 'batch-0')
 
         end_log_list = self.deepcopy_list(processing_log_list)
@@ -142,6 +132,8 @@ class StockAverageLineService(BaseService):
                         warn_log_list.append(exchange_code)
                         warn_log_list.append('average_line_max_the_date')
                         warn_log_list.append(average_line_max_the_date)
+                        warn_log_list.append('calendar_max_the_date')
+                        warn_log_list.append(calendar_max_the_date)
                         self.logger.warn(warn_log_list)
                         continue
 
@@ -152,7 +144,7 @@ class StockAverageLineService(BaseService):
                     # 批量(10)列表的处理进度打印
                     if add_up % 10 == 0:
                         process_line += '#'
-                        processing = self.base_round_zero(Decimal(add_up) / Decimal(len_result) * 100, 2)
+                        processing = self.base_round_zero(add_up / (len_result) * 100, 2)
                         batch_log_list = self.deepcopy_list(security_codes_log_list)
                         batch_log_list.append('inner')
                         batch_log_list.append(add_up)
@@ -163,7 +155,7 @@ class StockAverageLineService(BaseService):
                 # 最后一批增量列表的处理进度打印
                 if add_up % 10 != 0:
                     process_line += '#'
-                processing = self.base_round_zero(Decimal(add_up) / Decimal(len_result) * 100, 2)
+                processing = self.base_round_zero(add_up / (len_result) * 100, 2)
                 batch_log_list = self.deepcopy_list(security_codes_log_list)
                 batch_log_list.append('outer')
                 batch_log_list.append(add_up)
@@ -174,7 +166,7 @@ class StockAverageLineService(BaseService):
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            except_log_list = self.deepcopy_list(processing_log_list)
+            except_log_list = self.deepcopy_list(security_codes_log_list)
             except_log_list.append('outer')
             except_log_list.append(exc_type)
             except_log_list.append(exc_value)
@@ -242,8 +234,7 @@ class StockAverageLineService(BaseService):
         sql = "select the_date, close, amount, vol " \
               "from tquant_stock_day_kline " \
               "where security_code = {security_code} " \
-              "and exchange_code = {exchange_code} " \
-              "and close is not null and close > 0 "
+              "and exchange_code = {exchange_code} "
         max_the_date = None
         if decline_ma_the_date is not None:
             sql += "and the_date >= {max_the_date} "
@@ -366,13 +357,24 @@ class StockAverageLineService(BaseService):
         single_log_list.append('decline_ma_the_date')
         single_log_list.append(decline_ma_the_date)
 
+        result = self.get_stock_day_kline(security_code, exchange_code, decline_ma_the_date)
+        len_result = len(result)
         start_log_list = self.deepcopy_list(single_log_list)
+        start_log_list.append('result len ')
+        start_log_list.append(len_result)
         start_log_list.append('【start】')
         self.logger.info(start_log_list)
+        # 如果本次处理的数据条数小于ma，则无需处理
+        if len_result < self.ma:
+            warn_log_list = self.deepcopy_list(single_log_list)
+            warn_log_list.append('result len ')
+            warn_log_list.append(len_result)
+            warn_log_list.append('ma')
+            warn_log_list.append(self.ma)
+            self.logger.warn(warn_log_list)
+            return
 
         try:
-            result = self.get_stock_day_kline(security_code, exchange_code, decline_ma_the_date)
-            len_result = len(result)
             if result is not None and len_result > 0:
                 # 开始解析股票日K数据, the_date, close
                 # 临时存储批量更新sql的列表
@@ -399,7 +401,7 @@ class StockAverageLineService(BaseService):
                     if previous_data is None or len(previous_data) == 0:
                         the_date = temp_line_tuple[self.ma - 1][0]
                         previous_data = self.get_previous_data(security_code, exchange_code, the_date)
-                    # 返回值list [the_date,
+                        # 返回值list [the_date,
                         # close, close_avg, close_pre_avg, close_avg_chg,
                         # amount, amount_avg, amount_pre_avg, amount_avg_chg,
                         # vol, vol_avg, vol_pre_avg, vol_avg_chg,
@@ -431,7 +433,7 @@ class StockAverageLineService(BaseService):
 
                                                     amount_flow_chg=list_data[16],
                                                     vol_flow_chg=list_data[17]
-                                                   )
+                                                    )
                     # print(upsert_sql)
                     # 将本次的处理结果重新赋值到previous_data中
                     previous_data = [[list_data[2], list_data[6], list_data[11], list_data[13]]]
@@ -445,11 +447,11 @@ class StockAverageLineService(BaseService):
                         if len_result == self.ma:
                             processing = self.base_round_zero(Decimal(1) * 100, 2)
                         else:
-                            processing = self.base_round_zero(Decimal(add_up) / Decimal(len_result - self.ma + 1) * 100, 2)
+                            processing = self.base_round_zero(add_up / (len_result - self.ma + 1) * 100, 2)
 
                         batch_log_list = self.deepcopy_list(single_log_list)
                         batch_log_list.append('inner')
-                        batch_log_list.append(add_up)
+                        batch_log_list.append(add_up + self.ma - 1)
                         batch_log_list.append(len_result)
                         batch_log_list.append(process_line)
                         batch_log_list.append(str(processing) + '%')
@@ -466,11 +468,11 @@ class StockAverageLineService(BaseService):
                 if len_result == self.ma:
                     processing = self.base_round_zero(Decimal(1) * 100, 2)
                 else:
-                    processing = self.base_round_zero(Decimal(add_up) / Decimal(len_result - self.ma + 1) * 100, 2)
+                    processing = self.base_round_zero(add_up / (len_result - self.ma + 1) * 100, 2)
 
                 batch_log_list = self.deepcopy_list(single_log_list)
                 batch_log_list.append('outer')
-                batch_log_list.append(add_up)
+                batch_log_list.append(add_up + self.ma - 1)
                 batch_log_list.append(len_result)
                 batch_log_list.append(process_line)
                 batch_log_list.append(str(processing) + '%')
@@ -485,5 +487,7 @@ class StockAverageLineService(BaseService):
             self.logger.exception(except_log_list)
 
         end_log_list = self.deepcopy_list(single_log_list)
+        end_log_list.append('result len ')
+        end_log_list.append(len_result)
         end_log_list.append('【end】')
         self.logger.info(end_log_list)

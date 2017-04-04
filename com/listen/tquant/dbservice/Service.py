@@ -4,6 +4,7 @@ import pymysql
 import configparser
 import os
 import traceback
+import sys
 
 class DbService(object):
     def __init__(self):
@@ -73,5 +74,92 @@ class DbService(object):
             else:
                 return None
         except Exception:
-            print('sql error:', query_sql)
-            traceback.print_exc()
+            exc_type, exc_value, exc_traceback = sys.exc_info()
+            print(exc_type, exc_value, exc_traceback, 'sql error:', query_sql)
+            return None
+
+    def query_all_security_codes(self):
+        sql = "select security_code, exchange_code " \
+              "from tquant_security_info " \
+              "where security_type = 'STOCK'"
+        return self.query(sql)
+
+    def get_calendar_max_the_date(self):
+        """
+        查询交易日表中最大交易日日期
+        :return:
+        """
+        sql = "select max(the_date) max_the_date from tquant_calendar_info"
+        the_date = self.query(sql)
+        if the_date is not None and len(the_date) > 0:
+            max_the_date = the_date[0][0]
+            return max_the_date
+        return None
+
+    def get_batch_list_security_codes(self, batch_size):
+        tuple_security_codes = self.query_all_security_codes()
+        if tuple_security_codes is not None and len(tuple_security_codes) > 0:
+            batch_list = []
+            size = len(tuple_security_codes)
+            # 分组后余数
+            remainder = size % batch_size
+            if remainder > 0:
+                remainder = 1
+            # 分组数，取整数，即批量的倍数
+            multiple = size // batch_size
+            total = remainder + multiple
+            print('size:', size, 'batch:', batch_size, 'remainder:', remainder, 'multiple:', multiple, 'total:', total)
+            i = 0
+            while i < total:
+                # 如果是最后一组，则取全量
+                if i == total - 1:
+                    temp_tuple = tuple_security_codes[i * batch_size:size]
+                else:
+                    temp_tuple = tuple_security_codes[i * batch_size:(i + 1) * batch_size]
+                batch_list.append(temp_tuple)
+                i += 1
+            return batch_list
+        return None
+
+    def get_batch_list_except_security_codes(self):
+        sql = "select c.security_code, c.exchange_code " \
+              "from " \
+              "( " \
+              "select a.security_code, a.exchange_code, a.k_count, b.avg_count ," \
+              "b.ma, (a.k_count-b.avg_count + 1) diff " \
+              "from " \
+              "( " \
+              "select security_code, exchange_code, count(*) k_count " \
+              "from tquant_stock_day_kline " \
+              "group by security_code, exchange_code" \
+              ") a " \
+              "left join " \
+              "( " \
+              "select security_code, exchange_code, ma, count(*) avg_count " \
+              "from tquant_stock_average_line " \
+              "group by security_code, exchange_code, ma" \
+              ") b " \
+              "on a.security_code = b.security_code and b.exchange_code = a.exchange_code " \
+              "having (a.k_count-b.avg_count + 1) != b.ma ) c " \
+              "group by c.security_code, c.exchange_code "
+        tuple_security_codes = self.query(sql)
+        if tuple_security_codes is not None and len(tuple_security_codes) > 0:
+            return tuple_security_codes
+        return None
+
+    def get_day_kline_except_security_codes(self):
+        sql = "select security_code, exchange_code " \
+              "from " \
+              "( " \
+              "select security_code, exchange_code " \
+              "from tquant_stock_day_kline " \
+              "where close is null or close <= 0 " \
+              "or open is null or open <= 0 " \
+              "or high <= 0 or high is null " \
+              "or low <= 0 or low is null " \
+              "group by security_code, exchange_code " \
+              ") a"
+        tuple_security_codes = self.query(sql)
+        if tuple_security_codes is not None and len(tuple_security_codes) > 0:
+            return tuple_security_codes
+        return None

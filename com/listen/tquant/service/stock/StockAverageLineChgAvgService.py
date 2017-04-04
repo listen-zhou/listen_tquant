@@ -35,10 +35,6 @@ class StockAverageLineChgAvgService(BaseService):
         init_log_list.append(one_time)
         self.logger.info(init_log_list)
 
-        self.query_stock_sql = "select security_code, exchange_code " \
-                               "from tquant_stock_average_line " \
-                               "group by security_code, exchange_code"
-
         self.upsert = 'insert into tquant_stock_average_line (security_code, the_date, exchange_code, ' \
                       'ma, ' \
                       'close_avg_chg_avg, ' \
@@ -88,7 +84,7 @@ class StockAverageLineChgAvgService(BaseService):
         # 获取交易日表最大交易日日期，类型为date.datetime
         calendar_max_the_date = self.get_calendar_max_the_date()
         # 需要处理的股票代码，查询股票基本信息表 security_code, exchange_code
-        result = self.dbService.query(self.query_stock_sql)
+        result = self.dbService.query_all_security_codes()
         self.processing_security_codes(processing_log_list, result, calendar_max_the_date, 'batch-0')
 
         end_log_list = self.deepcopy_list(processing_log_list)
@@ -166,7 +162,7 @@ class StockAverageLineChgAvgService(BaseService):
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            except_log_list = self.deepcopy_list(processing_log_list)
+            except_log_list = self.deepcopy_list(security_codes_log_list)
             except_log_list.append('outer')
             except_log_list.append(exc_type)
             except_log_list.append(exc_value)
@@ -314,9 +310,18 @@ class StockAverageLineChgAvgService(BaseService):
         start_log_list.append('【start】')
         self.logger.info(start_log_list)
 
+        result = self.get_stock_day_kline(security_code, exchange_code, decline_ma_the_date)
+        len_result = len(result)
+        if len_result < self.ma:
+            warn_log_list = self.deepcopy_list(single_log_list)
+            warn_log_list.append('result len ')
+            warn_log_list.append(len_result)
+            warn_log_list.append('ma')
+            warn_log_list.append(self.ma)
+            self.logger.warn(warn_log_list)
+            return
+
         try:
-            result = self.get_stock_day_kline(security_code, exchange_code, decline_ma_the_date)
-            len_result = len(result)
             if result is not None and len_result > 0:
                 # 开始解析股票日K数据, the_date, close
                 # 临时存储批量更新sql的列表
@@ -349,7 +354,7 @@ class StockAverageLineChgAvgService(BaseService):
                                                     price_avg_chg_avg=list_data[4],
                                                     amount_flow_chg_avg=list_data[5],
                                                     vol_flow_chg_avg=list_data[6]
-                                                   )
+                                                    )
                     # print(upsert_sql)
 
                     # 批量(100)提交数据更新
@@ -365,7 +370,7 @@ class StockAverageLineChgAvgService(BaseService):
 
                         batch_log_list = self.deepcopy_list(single_log_list)
                         batch_log_list.append('inner')
-                        batch_log_list.append(add_up)
+                        batch_log_list.append(add_up + self.ma - 1)
                         batch_log_list.append(len_result)
                         batch_log_list.append(process_line)
                         batch_log_list.append(str(processing) + '%')
@@ -386,7 +391,7 @@ class StockAverageLineChgAvgService(BaseService):
 
                 batch_log_list = self.deepcopy_list(single_log_list)
                 batch_log_list.append('outer')
-                batch_log_list.append(add_up)
+                batch_log_list.append(add_up + self.ma - 1)
                 batch_log_list.append(len_result)
                 batch_log_list.append(process_line)
                 batch_log_list.append(str(processing) + '%')

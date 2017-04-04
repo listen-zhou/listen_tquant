@@ -147,7 +147,7 @@ class CalendarService(BaseService):
                     except_log_list = self.deepcopy_list(processing_log_list)
                     except_log_list.append(exc_type)
                     except_log_list.append(exc_value)
-                    except_log_list.apend(exc_traceback)
+                    except_log_list.append(exc_traceback)
                     self.logger.error(except_log_list)
             if len(upsert_sql_list) > 0:
                 self.dbService.insert_many(upsert_sql_list)
@@ -167,7 +167,7 @@ class CalendarService(BaseService):
             except_log_list = self.deepcopy_list(processing_log_list)
             except_log_list.append(exc_type)
             except_log_list.append(exc_value)
-            except_log_list.apend(exc_traceback)
+            except_log_list.append(exc_traceback)
             self.logger.error(except_log_list)
 
         end_log_list = self.deepcopy_list(processing_log_list)
