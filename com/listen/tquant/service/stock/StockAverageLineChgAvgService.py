@@ -217,7 +217,7 @@ class StockAverageLineChgAvgService(BaseService):
         the_date = self.dbService.query(sql.format(average_line_max_the_date=self.quotes_surround(str(average_line_max_the_date)),
                                                    ma=self.ma))
         if the_date is not None and the_date != '':
-            decline_ma_the_date = the_date[0][0]
+            decline_ma_the_date = the_date[len(the_date) - 1][0]
             return decline_ma_the_date
         return None
 

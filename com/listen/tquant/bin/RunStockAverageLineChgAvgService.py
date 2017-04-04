@@ -29,8 +29,8 @@ batch_list = dbService.get_batch_list_security_codes(500)
 calendar_max_the_date = dbService.get_calendar_max_the_date()
 
 
-batch_num = 6
-ma = 10
+batch_num = 0
+ma = 3
 
 if batch_num < len(batch_list):
     batch_name = 'batch-' + str(batch_num)

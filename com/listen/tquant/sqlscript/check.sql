@@ -18,6 +18,7 @@ group by c.security_code, c.exchange_code;
 
 
 --------------------------
+# 查询不符合处理涨跌幅均的数据有哪些
 select security_code, ma, count(*) from tquant_stock_average_line
 where amount_avg_chg  is null
 or vol_avg_chg is null
@@ -25,12 +26,14 @@ or price_avg_chg is null
 or amount_flow_chg is null
 or vol_flow_chg is null
 group by security_code, ma
+# 把涨跌幅均数据清空，重新跑
 -- update tquant_stock_average_line set amount_avg_chg_avg = null
 and vol_avg_chg_avg = null
 and price_avg_chg_avg = null
 and amount_flow_chg_avg = null
 and vol_flow_chg_avg = null
 
+# 检验涨跌幅均数据是否完整
 select security_code, ma, count(*)
 from (
 select security_code, exchange_code, ma
@@ -41,7 +44,6 @@ and vol_avg_chg_avg is null
 and price_avg_chg_avg is null
 and amount_flow_chg_avg is null
 and vol_flow_chg_avg is null
-having count(*) > (ma -1)
 ) b
 group by security_code, ma
 having count(*) > (ma -1)
