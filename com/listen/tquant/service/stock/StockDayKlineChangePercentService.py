@@ -22,7 +22,7 @@ class StockDayKlineChangePercentService(BaseService):
         self.sleep_seconds = sleep_seconds
         self.one_time = one_time
 
-        self.log_list = [self.get_clsss_name()]
+        self.log_list = [self.get_classs_name()]
 
         init_log_list = self.deepcopy_list(self.log_list)
         init_log_list.append(self.get_method_name())
@@ -91,6 +91,9 @@ class StockDayKlineChangePercentService(BaseService):
         start_log_list.append(len_result)
         start_log_list.append('【start】')
         self.logger.info(start_log_list)
+
+        if len_result == 0:
+            return
 
         try:
             # 需要处理的股票代码
@@ -212,6 +215,9 @@ class StockDayKlineChangePercentService(BaseService):
         start_log_list.append(len_result)
         start_log_list.append('【start】')
         self.logger.info(start_log_list)
+
+        if len_result == 0:
+            return
 
         # 临时存储批量更新sql的列表
         upsert_sql_list = []

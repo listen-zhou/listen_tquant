@@ -27,7 +27,7 @@ class BaseService():
     def get_method_name(self):
         return inspect.stack()[1][3]
 
-    def get_clsss_name(self):
+    def get_classs_name(self):
         return self.__class__.__name__
 
     def division(self, divisor, dividend):

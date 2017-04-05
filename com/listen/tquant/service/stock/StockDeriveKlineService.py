@@ -17,7 +17,7 @@ class StockDeriveKlineService(BaseService):
     def __init__(self, dbService, kline_type, logger, sleep_seconds, one_time):
         super(StockDeriveKlineService, self).__init__(logger)
 
-        self.log_list = [self.get_clsss_name()]
+        self.log_list = [self.get_classs_name()]
         self.log_list.append(kline_type.strip())
 
         init_log_list = self.deepcopy_list(self.log_list)

@@ -23,7 +23,7 @@ class StockDayKlineService(BaseService):
         self.sleep_seconds = sleep_seconds
         self.one_time = one_time
 
-        self.log_list = [self.get_clsss_name()]
+        self.log_list = [self.get_classs_name()]
 
         init_log_list = self.deepcopy_list(self.log_list)
         init_log_list.append(self.get_method_name())
@@ -88,18 +88,23 @@ class StockDayKlineService(BaseService):
         else:
             security_codes_log_list = self.deepcopy_list(self.log_list)
         security_codes_log_list.append(batch_name)
-            
+
+        len_result = len(tuple_security_codes)
+        
         start_log_list = self.deepcopy_list(security_codes_log_list)
         start_log_list.append('tuple_security_codes size')
-        start_log_list.append(len(tuple_security_codes))
+        start_log_list.append(len_result)
         start_log_list.append('calendar_max_the_date')
         start_log_list.append(calendar_max_the_date)
         start_log_list.append('【start】')
         self.logger.info(start_log_list)
+
+        if len_result == 0:
+            return
+
         try:
 
-            if tuple_security_codes is not None and len(tuple_security_codes) > 0:
-                len_result = len(tuple_security_codes)
+            if tuple_security_codes is not None and len_result > 0:
                 # 需要处理的股票代码进度计数
                 add_up = 0
                 # 需要处理的股票代码进度打印字符
@@ -147,7 +152,7 @@ class StockDayKlineService(BaseService):
                         if add_up % 10 == 0:
                             process_line += '#'
                             processing = self.base_round(Decimal(add_up) / Decimal(len_result) * 100, 2)
-                            
+
                             batch_log_list = self.deepcopy_list(security_codes_log_list)
                             batch_log_list.append('inner')
                             batch_log_list.append(add_up)
@@ -188,7 +193,7 @@ class StockDayKlineService(BaseService):
 
         end_log_list = self.deepcopy_list(security_codes_log_list)
         end_log_list.append('tuple_security_codes size')
-        end_log_list.append(len(tuple_security_codes))
+        end_log_list.append(len_result)
         end_log_list.append('calendar_max_the_date')
         end_log_list.append(calendar_max_the_date)
         end_log_list.append('【end】')
@@ -228,6 +233,7 @@ class StockDayKlineService(BaseService):
         start_log_list = self.deepcopy_list(single_log_list)
         start_log_list.append('【start】')
         self.logger.info(start_log_list)
+
         # 注释掉的这行是因为在测试的时候发现返回的数据有问题，
         # 当 security_code == '000505' the_date='2010-01-04' 时，返回的数据为：
         # amount: [ 39478241.  39478241.]vol: [ 5286272.  5286272.]open: [ 7.5  7.5]high: [ 7.65  7.65]

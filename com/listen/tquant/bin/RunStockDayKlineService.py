@@ -22,7 +22,7 @@ level = logging.INFO
 sleep_seconds = 120
 one_time = True
 
-batch_num = 0
+batch_num = 6
 threads = []
 processing_log_list = None
 

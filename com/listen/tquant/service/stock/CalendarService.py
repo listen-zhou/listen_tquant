@@ -23,7 +23,7 @@ class CalendarService(BaseService):
         self.sleep_seconds = sleep_seconds
         self.one_time = one_time
 
-        self.log_list = [self.get_clsss_name()]
+        self.log_list = [self.get_classs_name()]
 
         init_log_list = self.deepcopy_list(self.log_list)
         init_log_list.append(self.get_method_name())

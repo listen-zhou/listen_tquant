@@ -23,7 +23,7 @@ class StockAverageLineChgAvgService(BaseService):
         self.sleep_seconds = sleep_seconds
         self.one_time = one_time
 
-        self.log_list = [self.get_clsss_name()]
+        self.log_list = [self.get_classs_name()]
         self.log_list.append('ma')
         self.log_list.append(ma)
 
@@ -344,6 +344,8 @@ class StockAverageLineChgAvgService(BaseService):
                     # close_avg_chg_avg, amount_avg_chg_avg, vol_avg_chg_avg,
                     # price_avg_chg_avg, amount_flow_chg_avg, vol_flow_chg_avg]
                     list_data = self.analysis(temp_line_tuple, security_code, exchange_code)
+                    self.logger.info([security_code, exchange_code])
+                    self.logger.info([list_data])
                     upsert_sql = self.upsert.format(security_code=self.quotes_surround(security_code),
                                                     the_date=self.quotes_surround(list_data[0].strftime('%Y-%m-%d')),
                                                     exchange_code=self.quotes_surround(exchange_code),

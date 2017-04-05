@@ -23,7 +23,7 @@ class StockAverageLineService(BaseService):
         self.sleep_seconds = sleep_seconds
         self.one_time = one_time
 
-        self.log_list = [self.get_clsss_name()]
+        self.log_list = [self.get_classs_name()]
         self.log_list.append('ma')
         self.log_list.append(ma)
 
@@ -181,7 +181,7 @@ class StockAverageLineService(BaseService):
         self.logger.info(end_log_list)
 
     def get_previous_data(self, security_code, exchange_code, the_date):
-        sql = "select close, amount, vol, price_avg from tquant_stock_average_line " \
+        sql = "select close_pre_avg, amount_pre_avg, vol_pre_avg, price_pre_avg from tquant_stock_average_line " \
               "where security_code = {security_code} " \
               "and exchange_code = {exchange_code} and ma = {ma} and the_date < {the_date} " \
               "order by the_date desc limit 1".format(security_code=self.quotes_surround(security_code),
@@ -249,13 +249,14 @@ class StockAverageLineService(BaseService):
     def analysis(self, temp_line_tuple, security_code, exchange_code, previous_data):
 
         # 前一ma日均收盘价，默认值为0，便于写入数据库
-        close_pre_avg = Decimal(0)
+        close_pre_avg = self.base_round_zero(Decimal(0), 2)
         # 前一ma日均成交额(元)
-        amount_pre_avg = Decimal(0)
+        amount_pre_avg = self.base_round_zero(Decimal(0), 2)
         # 前一ma日均成交量(手)
-        vol_pre_avg = Decimal(0)
+        vol_pre_avg = self.base_round_zero(Decimal(0), 2)
         # 前一ma日均成交价
-        price_pre_avg = Decimal(0)
+        price_pre_avg = self.base_round_zero(Decimal(0), 2)
+        # close_pre_avg, amount_pre_avg, vol_pre_avg, price_pre_avg
         if previous_data is not None and len(previous_data) > 0:
             close_pre_avg = previous_data[0][0]
             amount_pre_avg = previous_data[0][1]
@@ -275,7 +276,7 @@ class StockAverageLineService(BaseService):
         close_avg = self.base_round_zero(self.average_zero(close_list), 2)
         # 如果收盘ma日均价为None，则为异常数据，价格不可能为0
         # if close_avg is None:
-        #     close_avg = Decimal(0)
+        #     close_avg = self.base_round_zero(Decimal(0), 2)
         # ma日均收盘价涨跌幅=(ma日均收盘价 - 前一ma日均收盘价)/前一ma日均收盘价 * 100
         # 默认值为0
         close_avg_chg = self.base_round_zero(Decimal(0), 2)
@@ -292,7 +293,7 @@ class StockAverageLineService(BaseService):
         #     amount_avg = Decimal(0)
         # ma日均成交额涨跌幅=(ma日均成交额 - 前一ma日均成交额)/前一ma日均成交额 * 100
         # 默认值为0
-        amount_avg_chg = Decimal(0)
+        amount_avg_chg = self.base_round_zero(Decimal(0), 2)
         # if amount_pre_avg is not None and amount_pre_avg != Decimal(0):
         #     amount_avg_chg = self.base_round_zero(self.division_zero((amount_avg - amount_pre_avg), amount_pre_avg) * 100, 2)
         amount_avg_chg = self.base_round_zero(self.division_zero((amount_avg - amount_pre_avg), amount_pre_avg) * 100, 2)
@@ -305,7 +306,7 @@ class StockAverageLineService(BaseService):
         # if vol_avg is None:
         #     vol_avg = Decimal(0)
         # ma日均成交量涨跌幅=(ma日均成交量 - 前一ma日均成交量)/前一ma日均成交量 * 100
-        vol_avg_chg = Decimal(0)
+        vol_avg_chg = self.base_round_zero(Decimal(0), 2)
         # if vol_pre_avg is not None and vol_pre_avg != Decimal(0):
         #     vol_avg_chg = self.base_round_zero(self.division_zero((vol_avg - vol_pre_avg), vol_pre_avg) * 100, 2)
         vol_avg_chg = self.base_round_zero(self.division_zero((vol_avg - vol_pre_avg), vol_pre_avg) * 100, 2)
@@ -315,7 +316,7 @@ class StockAverageLineService(BaseService):
         # if price_avg is None:
         #     price_avg = Decimal(0)
         # ma日均成交价涨跌幅=(ma日均成交价 - 前一ma日均成交价)/前一ma日均成交价 * 100
-        price_avg_chg = Decimal(0)
+        price_avg_chg = self.base_round_zero(Decimal(0), 2)
         # if price_pre_avg is not None and price_pre_avg != Decimal(0):
         #     price_avg_chg = self.base_round_zero(self.division_zero((price_avg - price_pre_avg), price_pre_avg) * 100, 2)
         price_avg_chg = self.base_round_zero(self.division_zero((price_avg - price_pre_avg), price_pre_avg) * 100, 2)
@@ -400,6 +401,7 @@ class StockAverageLineService(BaseService):
                     # 如果前一交易日的数据为空，则去查询一次
                     if previous_data is None or len(previous_data) == 0:
                         the_date = temp_line_tuple[self.ma - 1][0]
+                        # close_pre_avg, amount_pre_avg, vol_pre_avg, price_pre_avg
                         previous_data = self.get_previous_data(security_code, exchange_code, the_date)
                         # 返回值list [the_date,
                         # close, close_avg, close_pre_avg, close_avg_chg,
@@ -408,6 +410,12 @@ class StockAverageLineService(BaseService):
                         # price_avg, price_pre_avg, price_avg_chg,
                         # amount_flow_chg, vol_flow_chg]
                     list_data = self.analysis(temp_line_tuple, security_code, exchange_code, previous_data)
+                    self.logger.info(['the_date', 'close', 'close_avg', 'close_pre_avg', 'close_avg_chg',
+                                      'amount', 'amount_avg', 'amount_pre_avg', 'amount_avg_chg',
+                                      'vol', 'vol_avg', 'vol_pre_avg', 'vol_avg_chg',
+                                      'price_avg', 'price_pre_avg', 'price_avg_chg',
+                                      'amount_flow_chg', 'vol_flow_chg'])
+                    self.logger.info([list_data])
                     upsert_sql = self.upsert.format(security_code=self.quotes_surround(security_code),
                                                     the_date=self.quotes_surround(list_data[0].strftime('%Y-%m-%d')),
                                                     exchange_code=self.quotes_surround(exchange_code),
@@ -436,7 +444,8 @@ class StockAverageLineService(BaseService):
                                                     )
                     # print(upsert_sql)
                     # 将本次的处理结果重新赋值到previous_data中
-                    previous_data = [[list_data[2], list_data[6], list_data[11], list_data[13]]]
+                    # close_pre_avg, amount_pre_avg, vol_pre_avg, price_pre_avg
+                    previous_data = [[list_data[2], list_data[6], list_data[10], list_data[13]]]
 
                     # 批量(100)提交数据更新
                     if len(upsert_sql_list) == 1000:
@@ -478,7 +487,6 @@ class StockAverageLineService(BaseService):
                 batch_log_list.append(str(processing) + '%')
                 self.logger.info(batch_log_list)
         except Exception:
-            exc_type, exc_value, exc_traceback = sys.exc_info()
             exc_type, exc_value, exc_traceback = sys.exc_info()
             except_log_list = self.deepcopy_list(single_log_list)
             except_log_list.append(exc_type)
