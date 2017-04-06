@@ -246,7 +246,7 @@ class StockDayKlineService(BaseService):
             result = None
             try:
                 if recent_few_days == 0:
-                    result = tt.get_all_daybar(security_code, 'hfq')
+                    result = tt.get_all_daybar(security_code, 'qfq')
                 else:
                     result = tt.get_last_n_daybar(security_code, recent_few_days, 'hfq')
             except Exception:

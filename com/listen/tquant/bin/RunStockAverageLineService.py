@@ -19,7 +19,7 @@ sleep_seconds = 120
 one_time = True
 # mas = [3, 5, 10, 20, 30, 60, 120, 250]
 ma = 10
-batch_num = 6
+batch_num = 0
 dbService = DbService()
 processing_log_list = None
 
@@ -66,16 +66,18 @@ processing_log_list = None
 
 # 筛选异常股票代码，并处理这些异常数据
 # tuple_security_codes = dbService.get_batch_list_except_security_codes()
+mas = [3, 5, 10]
 tuple_security_codes = [('002460', 'SZ'), ('002466', 'SZ')]
 if tuple_security_codes is not None and len(tuple_security_codes) > 0:
     batch_name = 'batch-' + str(batch_num)
     log_name = log_name.format([ma, batch_name])
     print(log_path + log_name)
     logger = Logger(level, log_path, log_name, when, interval, backupCount)
-    batchService = StockAverageLineService(DbService(), ma, logger, sleep_seconds, one_time)
-    for tuple_security_code in tuple_security_codes:
-        security_code = tuple_security_code[0]
-        exchange_code = tuple_security_code[1]
-        batchService.processing_single_security_code(processing_log_list, security_code, exchange_code, None)
+    for ma in mas:
+        batchService = StockAverageLineService(DbService(), ma, logger, sleep_seconds, one_time)
+        for tuple_security_code in tuple_security_codes:
+            security_code = tuple_security_code[0]
+            exchange_code = tuple_security_code[1]
+            batchService.processing_single_security_code(processing_log_list, security_code, exchange_code, None)
 
 
