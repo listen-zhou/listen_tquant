@@ -322,12 +322,12 @@ class StockAverageLineService(BaseService):
         price_avg_chg = self.base_round_zero(self.division_zero((price_avg - price_pre_avg), price_pre_avg) * 100, 2)
 
         # 日金钱流向涨跌幅=日成交额/ma日(含)均成交额 * 100
-        amount_flow_chg = self.base_round_zero(self.division_zero(amount, amount_avg) * 100, 2)
+        amount_flow_chg = self.base_round_zero(self.division_zero(amount - amount_avg, amount_avg), 2)
         # if amount_flow_chg is None:
         #     amount_flow_chg = Decimal(0)
 
         # 日成交量流向涨跌幅=日成交量/ma日(含)均成交量 * 100
-        vol_flow_chg = self.base_round_zero(self.division_zero(vol, vol_avg) * 100, 2)
+        vol_flow_chg = self.base_round_zero(self.division_zero(vol - vol_avg, vol_avg), 2)
         # if vol_flow_chg is None:
         #     vol_flow_chg = Decimal(0)
 
@@ -410,12 +410,6 @@ class StockAverageLineService(BaseService):
                         # price_avg, price_pre_avg, price_avg_chg,
                         # amount_flow_chg, vol_flow_chg]
                     list_data = self.analysis(temp_line_tuple, security_code, exchange_code, previous_data)
-                    self.logger.info(['the_date', 'close', 'close_avg', 'close_pre_avg', 'close_avg_chg',
-                                      'amount', 'amount_avg', 'amount_pre_avg', 'amount_avg_chg',
-                                      'vol', 'vol_avg', 'vol_pre_avg', 'vol_avg_chg',
-                                      'price_avg', 'price_pre_avg', 'price_avg_chg',
-                                      'amount_flow_chg', 'vol_flow_chg'])
-                    self.logger.info([list_data])
                     upsert_sql = self.upsert.format(security_code=self.quotes_surround(security_code),
                                                     the_date=self.quotes_surround(list_data[0].strftime('%Y-%m-%d')),
                                                     exchange_code=self.quotes_surround(exchange_code),

@@ -248,7 +248,7 @@ class StockDayKlineService(BaseService):
                 if recent_few_days == 0:
                     result = tt.get_all_daybar(security_code, 'qfq')
                 else:
-                    result = tt.get_last_n_daybar(security_code, recent_few_days, 'hfq')
+                    result = tt.get_last_n_daybar(security_code, recent_few_days, 'qfq')
             except Exception:
                 exc_type, exc_value, exc_traceback = sys.exc_info()
                 except_log_list = self.deepcopy_list(single_log_list)
