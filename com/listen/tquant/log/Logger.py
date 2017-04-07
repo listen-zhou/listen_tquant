@@ -43,6 +43,19 @@ class Logger():
             return message
         return ''
 
+    def base_log(self, list, level=logging.INFO):
+        message = self.format_list(list)
+        if logging.DEBUG == level:
+            self.log.debug(message)
+        elif logging.INFO == level:
+            self.log.info(message)
+        elif logging.WARNING == level:
+            self.log.warning(message)
+        elif logging.ERROR == level:
+            self.log.error(message)
+        else:
+            pass
+
     def debug(self, list):
         message = self.format_list(list)
         self.log.debug(message)

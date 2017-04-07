@@ -6,6 +6,8 @@ import os
 import traceback
 import sys
 
+from com.listen.tquant.utils.Utils import Utils
+
 class DbService(object):
     def __init__(self):
         # charset必须设置为utf8，而不能为utf-8
@@ -162,4 +164,140 @@ class DbService(object):
         tuple_security_codes = self.query(sql)
         if tuple_security_codes is not None and len(tuple_security_codes) > 0:
             return tuple_security_codes
+        return None
+
+    def get_stock_day_kline(self, security_code, exchange_code, decline_ma_the_date):
+        sql = "select the_date, close, amount, vol " \
+              "from tquant_stock_day_kline " \
+              "where security_code = {security_code} " \
+              "and exchange_code = {exchange_code} "
+        max_the_date = None
+        if decline_ma_the_date is not None:
+            sql += "and the_date >= {max_the_date} "
+            max_the_date = decline_ma_the_date.strftime('%Y-%m-%d')
+        sql += "order by the_date asc "
+        sql = sql.format(security_code=Utils.quotes_surround(security_code),
+                         exchange_code=Utils.quotes_surround(exchange_code),
+                         max_the_date=Utils.quotes_surround(max_the_date)
+                         )
+        result = self.query(sql)
+        return result
+
+    def get_previous_average_line(self, ma, security_code, exchange_code, the_date):
+        sql = "select close_pre_avg, amount_pre_avg, vol_pre_avg, price_pre_avg from tquant_stock_average_line " \
+              "where security_code = {security_code} " \
+              "and exchange_code = {exchange_code} and ma = {ma} and the_date < {the_date} " \
+              "order by the_date desc limit 1".format(security_code=Utils.quotes_surround(security_code),
+                                                      exchange_code=Utils.quotes_surround(exchange_code),
+                                                      ma=ma,
+                                                      the_date=Utils.quotes_surround(the_date.strftime('%Y-%m-%d')))
+        previous_data = self.query(sql)
+        return previous_data
+
+    def get_average_line(self, ma, security_code, exchange_code, decline_ma_the_date):
+        sql = "select the_date, " \
+              "close_avg_chg, amount_avg_chg, vol_avg_chg, " \
+              "price_avg_chg, amount_flow_chg, vol_flow_chg " \
+              "from tquant_stock_average_line " \
+              "where security_code = {security_code} " \
+              "and exchange_code = {exchange_code} " \
+              "and ma = {ma} " \
+              "and close_avg_chg is not null " \
+              "and amount_avg_chg is not null " \
+              "and vol_avg_chg is not null " \
+              "and price_avg_chg is not null " \
+              "and amount_flow_chg is not null " \
+              "and vol_flow_chg is not null "
+        max_the_date = None
+        if decline_ma_the_date is not None:
+            sql += "and the_date >= {max_the_date} "
+            max_the_date = decline_ma_the_date.strftime('%Y-%m-%d')
+        sql += "order by the_date asc "
+        sql = sql.format(security_code=Utils.quotes_surround(security_code),
+                         exchange_code=Utils.quotes_surround(exchange_code),
+                         max_the_date=Utils.quotes_surround(max_the_date),
+                         ma=ma
+                         )
+        result = self.query(sql)
+        return result
+
+    def get_day_kline_max_the_date(self, security_code, exchange_code):
+        sql = "select max(the_date) max_the_date from tquant_stock_day_kline " \
+              "where security_code = {security_code} " \
+              "and exchange_code = {exchange_code} " \
+              "and previous_close is not null and close_change_percent is not null "
+        the_date = self.query(sql.format(security_code=Utils.quotes_surround(security_code),
+                                         exchange_code=Utils.quotes_surround(exchange_code)
+                                        )
+                              )
+        if the_date:
+            max_the_date = the_date[0][0]
+            return max_the_date
+        return None
+
+    def get_average_line_max_the_date(self, ma, security_code, exchange_code):
+        sql = "select max(the_date) max_the_date from tquant_stock_average_line " \
+              "where security_code = {security_code} " \
+              "and exchange_code = {exchange_code} " \
+              "and ma = {ma}"
+        the_date = self.query(sql.format(security_code=Utils.quotes_surround(security_code),
+                                         exchange_code=Utils.quotes_surround(exchange_code),
+                                         ma=ma
+                                         )
+                              )
+        if the_date:
+            max_the_date = the_date[0][0]
+            return max_the_date
+        return None
+
+    def get_average_line_decline_max_the_date(self, ma, average_line_max_the_date):
+        if average_line_max_the_date is not None and average_line_max_the_date != '':
+            sql = "select min(the_date) from (select the_date from tquant_calendar_info " \
+                  "where the_date <= {average_line_max_the_date} " \
+                  "order by the_date desc limit {ma}) a"
+        else:
+            sql = "select min(the_date) from tquant_calendar_info"
+        the_date = self.query(sql.format(average_line_max_the_date=Utils.quotes_surround(str(average_line_max_the_date)),
+                                                   ma=ma)
+                                        )
+        if the_date is not None and the_date != '':
+            decline_ma_the_date = the_date[0][0]
+            return decline_ma_the_date
+        return None
+
+    def get_average_line_avg_max_the_date(self, ma, security_code, exchange_code):
+        sql = "select max(the_date) max_the_date from tquant_stock_average_line " \
+              "where security_code = {security_code} " \
+              "and exchange_code = {exchange_code} " \
+              "and ma = {ma} " \
+              "and close_avg_chg is not null " \
+              "and amount_avg_chg is not null " \
+              "and vol_avg_chg is not null " \
+              "and price_avg_chg is not null " \
+              "and amount_flow_chg is not null " \
+              "and vol_flow_chg is not null "
+        the_date = self.query(sql.format(security_code=Utils.quotes_surround(security_code),
+                                                   exchange_code=Utils.quotes_surround(exchange_code),
+                                                   ma=ma
+                                         )
+                              )
+        if the_date:
+            max_the_date = the_date[0][0]
+            return max_the_date
+        return None
+
+    def get_average_line_avg_decline_max_the_date(self, ma, average_line_avg_max_the_date):
+        if average_line_avg_max_the_date is not None and average_line_avg_max_the_date != '':
+            sql = "select min(the_date) from (select the_date from tquant_calendar_info " \
+                  "where the_date <= {average_line_max_the_date} " \
+                  "order by the_date desc limit {ma}) a"
+        else:
+            sql = "select min(the_date) from tquant_calendar_info"
+        the_date = self.query(sql.format(average_line_max_the_date=Utils.quotes_surround(str(average_line_avg_max_the_date)),
+                                         ma=ma
+                                         )
+                              )
+        if the_date is not None and the_date != '':
+            decline_ma_the_date = the_date[0][0]
+            return decline_ma_the_date
         return None
