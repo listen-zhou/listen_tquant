@@ -1,12 +1,26 @@
 # coding: utf-8
+import threading
 
+import datetime
 import tquant as tt
 import sys
 import numpy
 from com.listen.tquant.utils.Utils import Utils
 import logging
 from com.listen.tquant.service.Service import Service
+import time
+from com.listen.tquant.redis.StockAverageLineRedisService import StockAverageLineRedisService
+
+
 class StockOneStepBusinessService(Service):
+    """
+    股票行情及衍生数据一条龙处理服务
+    """
+
+
+    """
+    日K数据入库
+    """
     upsert_day_kline = 'insert into tquant_stock_day_kline (security_code, the_date, exchange_code, ' \
                   'amount, vol, open, high, low, close) ' \
                   'values ({security_code}, {the_date}, {exchange_code}, ' \
@@ -15,6 +29,9 @@ class StockOneStepBusinessService(Service):
                   'amount=values(amount), vol=values(vol), open=values(open), ' \
                   'high=values(high), low=values(low), close=values(close) '
 
+    """
+    日K涨跌幅数据入库
+    """
     upsert_day_kline_change_percent = 'insert into tquant_stock_day_kline (security_code, the_date, exchange_code, ' \
                   'previous_close, close_change_percent, ' \
                   'previous_amount, amount_change_percent, ' \
@@ -27,6 +44,9 @@ class StockOneStepBusinessService(Service):
                   'previous_amount=values(previous_amount), amount_change_percent=values(amount_change_percent), ' \
                   'previous_vol=values(previous_vol), vol_change_percent=values(vol_change_percent)'
 
+    """
+    均线数据入库（3,5,10日等）
+    """
     upsert_average_line = 'insert into tquant_stock_average_line (security_code, the_date, exchange_code, ' \
                   'ma, ' \
                   'close, close_avg, close_pre_avg, close_avg_chg, ' \
@@ -48,6 +68,9 @@ class StockOneStepBusinessService(Service):
                   'price_avg=values(price_avg), price_pre_avg=values(price_pre_avg), price_avg_chg=values(price_avg_chg), ' \
                   'amount_flow_chg=values(amount_flow_chg), vol_flow_chg=values(vol_flow_chg) '
 
+    """
+    均线数据涨跌幅均值数入库
+    """
     upsert_average_line_avg = 'insert into tquant_stock_average_line (security_code, the_date, exchange_code, ' \
                   'ma, ' \
                   'close_avg_chg_avg, ' \
@@ -69,11 +92,20 @@ class StockOneStepBusinessService(Service):
                   'price_avg_chg_avg=values(price_avg_chg_avg), ' \
                   'amount_flow_chg_avg=values(amount_flow_chg_avg), vol_flow_chg_avg=values(vol_flow_chg_avg) '
 
-    def __init__(self, dbService, logger, mas, security_codes, is_reset):
+    def __init__(self, dbService, logger, mas, security_codes, redisService, is_reset=False):
+        """
+        股票行情及衍生数据处理一条龙服务，初始化
+        :param dbService: 数据操作对象
+        :param logger: 日志记录对象
+        :param mas: 均线类型列表，如3,5，10等
+        :param security_codes: 股票代码及交易所列表，如[['002466', 'SZ'], ['002460', 'SZ']]
+        :param is_reset: 是否重置所有数据，一般在第一次初始化数据的时候设置为True，其余情况设置为False
+        """
         self.dbService = dbService
         self.logger = logger
         self.mas = mas
         self.security_codes = security_codes
+        self.redisService = redisService
         self.is_reset = is_reset
         self.log_list = [self.get_classs_name()]
 
@@ -88,6 +120,10 @@ class StockOneStepBusinessService(Service):
         self.logger.base_log(init_log_list)
 
     def processing(self):
+        """
+        股票行情及衍生数据处理入口
+        :return: 
+        """
         start_log_list = Utils.deepcopy_list(self.log_list)
         start_log_list.append(self.get_method_name())
         start_log_list.append('【start】...')
@@ -98,6 +134,7 @@ class StockOneStepBusinessService(Service):
                 if item is not None and len(item) == 2:
                     security_code = item[0]
                     exchange_code = item[1]
+                    # 单只股票处理方法
                     self.processing_single_security_code(security_code, exchange_code)
 
         end_log_list = Utils.deepcopy_list(self.log_list)
@@ -106,6 +143,12 @@ class StockOneStepBusinessService(Service):
         self.logger.base_log(end_log_list)
 
     def processing_single_security_code(self, security_code, exchange_code):
+        """
+        单只股票处理方法
+        :param security_code: 股票代码
+        :param exchange_code: 交易所代码
+        :return: 
+        """
         start_log_list = Utils.deepcopy_list(self.log_list)
         start_log_list.append(self.get_method_name())
         start_log_list.append('security_code')
@@ -115,12 +158,11 @@ class StockOneStepBusinessService(Service):
         start_log_list.append('【start】...')
         self.logger.base_log(start_log_list)
 
+        # 股票日K数据处理方法
         self.processing_day_kline(security_code, exchange_code)
-        self.processing_day_kline_change_percent(security_code, exchange_code)
-        if self.mas is not None and len(self.mas) > 0:
-            for ma in self.mas:
-                self.processing_average_line(ma, security_code, exchange_code)
-                self.processing_average_line_avg(ma, security_code, exchange_code)
+        # 股票日K数据处理后有关计算的方法
+        self.procesing_day_kline_after(security_code, exchange_code)
+        self.processing_start_real_time_thread(security_code, exchange_code)
 
         end_log_list = Utils.deepcopy_list(self.log_list)
         end_log_list.append(self.get_method_name())
@@ -132,6 +174,13 @@ class StockOneStepBusinessService(Service):
         self.logger.base_log(end_log_list)
 
     def processing_day_kline(self, security_code, exchange_code, recent_few_days=10):
+        """
+        股票日K数据处理，分全量还是增量
+        :param security_code: 股票代码
+        :param exchange_code: 交易所代码
+        :param recent_few_days: 查询最近几天的日K行情
+        :return: 
+        """
         try:
             start_log_list = Utils.deepcopy_list(self.log_list)
             start_log_list.append(self.get_method_name())
@@ -197,7 +246,7 @@ class StockOneStepBusinessService(Service):
                             progress_log_list.append(add_up)
                             progress_log_list.append(len_indexes)
                             progress_log_list.append(process_line)
-                            progress_log_list.append(progress)
+                            progress_log_list.append(str(progress) + '%')
                             self.logger.base_log(progress_log_list)
                         else:
                             upsert_sql_list.append(upsert_sql)
@@ -260,7 +309,47 @@ class StockOneStepBusinessService(Service):
         end_log_list.append('【end】')
         self.logger.base_log(end_log_list)
 
+    def procesing_day_kline_after(self, security_code, exchange_code):
+        """
+        日K数据入库后计算涨跌幅，均线，均值等数据，并入库
+        :param security_code: 股票代码
+        :param exchange_code: 交易所
+        :return: 
+        """
+        start_log_list = Utils.deepcopy_list(self.log_list)
+        start_log_list.append(self.get_method_name())
+        start_log_list.append('security_code')
+        start_log_list.append(security_code)
+        start_log_list.append('exchange_code')
+        start_log_list.append(exchange_code)
+        start_log_list.append('【start】...')
+        self.logger.base_log(start_log_list)
+
+        # 股票日K涨跌幅处理方法
+        self.processing_day_kline_change_percent(security_code, exchange_code)
+        if self.mas is not None and len(self.mas) > 0:
+            for ma in self.mas:
+                # 股票均线数据处理方法
+                self.processing_average_line(ma, security_code, exchange_code)
+                # 股票均线数据平均值处理方法
+                self.processing_average_line_avg(ma, security_code, exchange_code)
+
+        end_log_list = Utils.deepcopy_list(self.log_list)
+        end_log_list.append(self.get_method_name())
+        end_log_list.append('security_code')
+        end_log_list.append(security_code)
+        end_log_list.append('exchange_code')
+        end_log_list.append(exchange_code)
+        end_log_list.append('【end】')
+        self.logger.base_log(end_log_list)
+
     def analysis_columns_day_kline(self, day_kline, idx):
+        """
+        股票日K数据处理方法
+        :param day_kline: 日K的DataFrame
+        :param idx: DataFrame的索引
+        :return: 
+        """
         try:
             the_date = (str(idx))[0:10]
 
@@ -306,7 +395,13 @@ class StockOneStepBusinessService(Service):
             self.logger.base_log(error_log_list, logging.ERROR)
             return None
 
-    def processing_day_kline_change_percent(self, security_code, exchange_code):
+    def processing_day_kline_change_percent(self, security_code, exchange_code, is_reset=False):
+        """
+        股票日K数据涨跌幅处理方法
+        :param security_code: 股票代码
+        :param exchange_code: 交易所代码
+        :return: 
+        """
         start_log_list = Utils.deepcopy_list(self.log_list)
         start_log_list.append(self.get_method_name())
         start_log_list.append('security_code')
@@ -316,7 +411,7 @@ class StockOneStepBusinessService(Service):
         start_log_list.append('【start】...')
         self.logger.base_log(start_log_list)
 
-        if self.is_reset:
+        if is_reset:
             day_kline_max_the_date = None
         else:
             day_kline_max_the_date = self.dbService.get_day_kline_max_the_date(security_code, exchange_code)
@@ -413,6 +508,11 @@ class StockOneStepBusinessService(Service):
 
 
     def analysis_day_kline_change_percent(self, temp_kline_tuple):
+        """
+        股票日K涨跌幅计算方法
+        :param temp_kline_tuple: 相邻两个日K数据的列表
+        :return: 
+        """
         try:
             # 需要处理的涨跌幅的交易日，即第二个元组的the_date
             the_date = temp_kline_tuple[1][0]
@@ -462,7 +562,14 @@ class StockOneStepBusinessService(Service):
             self.logger.base_log(error_log_list, logging.ERROR)
             return None
 
-    def processing_average_line(self, ma, security_code, exchange_code):
+    def processing_average_line(self, ma, security_code, exchange_code, is_reset=False):
+        """
+        股票均线数据处理方法
+        :param ma: 
+        :param security_code: 股票代码
+        :param exchange_code: 交易所代码
+        :return: 
+        """
         start_log_list = Utils.deepcopy_list(self.log_list)
         start_log_list.append(self.get_method_name())
         start_log_list.append(ma)
@@ -474,7 +581,7 @@ class StockOneStepBusinessService(Service):
         start_log_list.append('【start】...')
         self.logger.base_log(start_log_list)
 
-        if self.is_reset:
+        if is_reset:
             decline_ma_the_date = None
         else:
             average_line_max_the_date = self.dbService.get_average_line_max_the_date(ma, security_code, exchange_code)
@@ -629,7 +736,15 @@ class StockOneStepBusinessService(Service):
         self.logger.base_log(end_log_list)
 
     def analysis_average_line(self, ma, temp_line_tuple, security_code, exchange_code, previous_data):
-
+        """
+        股票均线数据计算方法
+        :param ma: 均线类型
+        :param temp_line_tuple: 均线数据的ma切片列表
+        :param security_code: 股票代码
+        :param exchange_code: 交易所代码
+        :param previous_data: 前一交易日数据
+        :return: 
+        """
         # 前一ma日均收盘价，默认值为0，便于写入数据库
         close_pre_avg = 0
         # 前一ma日均成交额(元)
@@ -704,12 +819,12 @@ class StockOneStepBusinessService(Service):
         price_avg_chg = Utils.base_round_zero(Utils.division_zero((price_avg - price_pre_avg), price_pre_avg) * 100, 2)
 
         # 日金钱流向涨跌幅=日成交额/ma日(含)均成交额 * 100
-        amount_flow_chg = Utils.base_round_zero(Utils.division_zero(amount, amount_avg), 2)
+        amount_flow_chg = Utils.base_round_zero(Utils.division_zero(amount - amount_avg, amount_avg), 2)
         # if amount_flow_chg is None:
         #     amount_flow_chg = Decimal(0)
 
         # 日成交量流向涨跌幅=日成交量/ma日(含)均成交量 * 100
-        vol_flow_chg = Utils.base_round_zero(Utils.division_zero(vol, vol_avg), 2)
+        vol_flow_chg = Utils.base_round_zero(Utils.division_zero(vol - vol_avg, vol_avg), 2)
         # if vol_flow_chg is None:
         #     vol_flow_chg = Decimal(0)
 
@@ -720,7 +835,14 @@ class StockOneStepBusinessService(Service):
                 price_avg, price_pre_avg, price_avg_chg,
                 amount_flow_chg, vol_flow_chg]
 
-    def processing_average_line_avg(self, ma, security_code, exchange_code):
+    def processing_average_line_avg(self, ma, security_code, exchange_code, is_reset=False):
+        """
+        股票均线数据涨跌幅平均数据处理方法
+        :param ma: 均线类型
+        :param security_code: 股票代码
+        :param exchange_code: 交易所代码
+        :return: 
+        """
         start_log_list = Utils.deepcopy_list(self.log_list)
         start_log_list.append(self.get_method_name())
         start_log_list.append('ma')
@@ -732,7 +854,7 @@ class StockOneStepBusinessService(Service):
         start_log_list.append('【start】...')
         self.logger.base_log(start_log_list)
 
-        if self.is_reset:
+        if is_reset:
             decline_ma_the_date = None
         else:
             average_line_avg_max_the_date = self.dbService.get_average_line_avg_max_the_date(ma, security_code, exchange_code)
@@ -858,7 +980,14 @@ class StockOneStepBusinessService(Service):
         self.logger.base_log(end_log_list)
 
     def analysis_average_line_avg(self, ma, temp_line_tuple, security_code, exchange_code):
-
+        """
+        均线数据涨跌幅平均计算方法
+        :param ma: 均线类型
+        :param temp_line_tuple: 均线数据ma切片列表
+        :param security_code: 股票代码
+        :param exchange_code: 交易所代码
+        :return: 
+        """
         # temp_line_tuple中的数据为the_date, close_avg_chg, amount_avg_chg,
         # vol_avg_chg, price_avg_chg, amount_flow_chg, vol_flow_chg
         # 当日the_date为正序排序最后一天的the_date，第一个元素
@@ -895,3 +1024,225 @@ class StockOneStepBusinessService(Service):
                 close_avg_chg_avg, amount_avg_chg_avg, vol_avg_chg_avg,
                 price_avg_chg_avg, amount_flow_chg_avg, vol_flow_chg_avg]
 
+    def processing_start_real_time_thread(self, security_code, exchange_code):
+        """
+        启动一个实时行情计算线程，单只股票
+        :param security_code: 股票代码
+        :param exchange_code: 交易所代码
+        :return: 
+        """
+        start_log_list = Utils.deepcopy_list(self.log_list)
+        start_log_list.append(self.get_method_name())
+        start_log_list.append('security_code')
+        start_log_list.append(security_code)
+        start_log_list.append('exchange_code')
+        start_log_list.append(exchange_code)
+        start_log_list.append('【start】...')
+        self.logger.base_log(start_log_list)
+
+        today = datetime.date.today()
+        max_the_date = self.dbService.get_day_kline_exist_max_the_date(security_code, exchange_code)
+        print('today', today, 'max_the_date', max_the_date)
+        if max_the_date is not None:
+            # 如果max_the_date < today，则说明今天的日K数据还没有入库，需要进行实时行情查询处理
+            if max_the_date < today:
+                thread = threading.Thread(target=self.processing_real_time_kline,
+                                          args=(security_code, exchange_code
+                                                )
+                                          )
+                thread.start()
+            else:
+                warn_log_list = Utils.deepcopy_list(self.log_list)
+                warn_log_list.append(self.get_method_name())
+                warn_log_list.append('security_code')
+                warn_log_list.append(security_code)
+                warn_log_list.append('exchange_code')
+                warn_log_list.append(exchange_code)
+                warn_log_list.append('max_the_date')
+                warn_log_list.append(max_the_date)
+                warn_log_list.append('>=')
+                warn_log_list.append('today')
+                warn_log_list.append(today)
+                warn_log_list.append('do not start thread')
+                self.logger.base_log(warn_log_list, logging.WARNING)
+        else:
+            thread = threading.Thread(target=self.processing_real_time_kline,
+                                      args=(security_code, exchange_code
+                                            )
+                                      )
+            thread.start()
+
+        end_log_list = Utils.deepcopy_list(self.log_list)
+        end_log_list.append(self.get_method_name())
+        end_log_list.append('security_code')
+        end_log_list.append(security_code)
+        end_log_list.append('exchange_code')
+        end_log_list.append(exchange_code)
+        end_log_list.append('【end】')
+        self.logger.base_log(end_log_list)
+
+    def processing_real_time_kline(self, security_code, exchange_code):
+        """
+        处理单只股票的实时行情
+        :param security_code: 
+        :param exchange_code: 
+        :return: 
+        """
+        start_log_list = Utils.deepcopy_list(self.log_list)
+        start_log_list.append(self.get_method_name())
+        start_log_list.append('security_code')
+        start_log_list.append(security_code)
+        start_log_list.append('exchange_code')
+        start_log_list.append(exchange_code)
+        start_log_list.append('【start】...')
+        self.logger.base_log(start_log_list)
+
+        while True:
+            curent_date = datetime.datetime.now()
+            start_while_log_list = Utils.deepcopy_list(self.log_list)
+            start_while_log_list.append(self.get_method_name())
+            start_while_log_list.append('security_code')
+            start_while_log_list.append(security_code)
+            start_while_log_list.append('exchange_code')
+            start_while_log_list.append(exchange_code)
+            start_while_log_list.append('curent_date')
+            start_while_log_list.append(curent_date)
+            start_while_log_list.append('start...')
+            self.logger.base_log(start_while_log_list)
+
+            start_date = datetime.datetime.now()
+            end_date = datetime.datetime.now()
+            start_date = end_date.replace(hour=9, minute=30, second=0, microsecond=0)
+            end_date = end_date.replace(hour=15, minute=0, second=0, microsecond=0)
+            if curent_date > end_date or curent_date < start_date:
+                sleep_seconds = 10
+                sleep_log_list = Utils.deepcopy_list(self.log_list)
+                sleep_log_list.append(self.get_method_name())
+                sleep_log_list.append('security_code')
+                sleep_log_list.append(security_code)
+                sleep_log_list.append('exchange_code')
+                sleep_log_list.append(exchange_code)
+                sleep_log_list.append('curent_date')
+                sleep_log_list.append(curent_date)
+                sleep_log_list.append('start_date')
+                sleep_log_list.append(start_date)
+                sleep_log_list.append('end_date')
+                sleep_log_list.append(end_date)
+                sleep_log_list.append('【sleep】 seconds')
+                sleep_log_list.append(sleep_seconds)
+                self.logger.base_log(sleep_log_list)
+                self.redisService.product_average_line_message(security_code, exchange_code)
+                time.sleep(sleep_seconds)
+            else:
+                # 5分钟K的实时行情
+                day_kline = tt.get_stock_bar(security_code, 1)
+                # 处理单只股票的实时行情，并入库
+                self.analysis_real_time_kline(security_code, exchange_code, day_kline, start_date)
+                # 股票日K涨跌幅处理方法
+                self.procesing_day_kline_after(security_code, exchange_code)
+
+            end_while_log_list = Utils.deepcopy_list(self.log_list)
+            end_while_log_list.append(self.get_method_name())
+            end_while_log_list.append('security_code')
+            end_while_log_list.append(security_code)
+            end_while_log_list.append('exchange_code')
+            end_while_log_list.append(exchange_code)
+            end_while_log_list.append('curent_date')
+            end_while_log_list.append(curent_date)
+            end_while_log_list.append('end')
+            self.logger.base_log(end_while_log_list)
+
+    def analysis_real_time_kline(self, security_code, exchange_code, day_kline, start_date):
+        """
+        解析单只股票的实时行情，并入库
+        :param security_code: 
+        :param exchange_code: 
+        :param day_kline: 
+        :param start_date: 
+        :return: 
+        """
+        if day_kline:
+            indexes_values = day_kline.index.values
+            the_date = None
+            high_max = None
+            low_min = None
+            open_first = None
+            close_last = None
+            total_amount = 0
+            total_vol = 0
+            if indexes_values is None or len(indexes_values) == 0:
+                warn_log_list = Utils.deepcopy_list(self.log_list)
+                warn_log_list.append(self.get_method_name())
+                warn_log_list.append('security_code')
+                warn_log_list.append(security_code)
+                warn_log_list.append('exchange_code')
+                warn_log_list.append(exchange_code)
+                warn_log_list.append('start_date')
+                warn_log_list.append(start_date)
+                warn_log_list.append('tt.get_stock_bar(security_code, 1)')
+                warn_log_list.append('indexes_values is None')
+                self.logger.base_log(warn_log_list, logging.WARNING)
+                return
+            for idx in indexes_values:
+                idx_datetime = datetime.datetime.utcfromtimestamp(idx.astype('O') / 1e9)
+                if idx_datetime >= start_date:
+                    amount = day_kline.at[idx, 'amount']
+                    if isinstance(amount, numpy.ndarray) and amount.size > 1:
+                        amount = amount.tolist()[0]
+                    amount = Utils.base_round(amount, 2)
+                    total_amount += amount
+
+                    vol = day_kline.at[idx, 'vol']
+                    if isinstance(vol, numpy.ndarray) and vol.size > 1:
+                        vol = vol.tolist()[0]
+                    vol = Utils.base_round(vol, 2)
+                    total_vol += Utils.base_round(vol, 2)
+
+                    high = day_kline.at[idx, 'high']
+                    if isinstance(high, numpy.ndarray) and high.size > 1:
+                        high = high.tolist()[0]
+                    high = Utils.base_round(high, 2)
+                    if high_max is None:
+                        high_max = high
+                    elif high > high_max:
+                        high_max = high
+
+                    low = day_kline.at[idx, 'low']
+                    if isinstance(low, numpy.ndarray) and low.size > 1:
+                        low = low.tolist()[0]
+                    low = Utils.base_round(low, 2)
+                    if low_min is None:
+                        low_min = low
+                    elif low < low_min:
+                        low_min = low
+
+                    open = day_kline.at[idx, 'open']
+                    if isinstance(open, numpy.ndarray) and open.size > 1:
+                        open = open.tolist()[0]
+                    open = Utils.base_round(open, 2)
+                    if open_first is None:
+                        open_first = open
+
+                    close = day_kline.at[idx, 'close']
+                    if isinstance(close, numpy.ndarray) and close.size > 1:
+                        close = close.tolist()[0]
+                    close = Utils.base_round(close, 2)
+                    close_last = close
+
+                    the_date = (idx_datetime.strftime('%Y-%m-%d'))
+
+            if the_date is not None:
+                total_amount = total_amount * 100
+                total_vol = total_vol * 100
+                upsert_sql = StockOneStepBusinessService.upsert_day_kline.format(
+                    security_code=Utils.quotes_surround(security_code),
+                    the_date=Utils.quotes_surround(the_date),
+                    exchange_code=Utils.quotes_surround(exchange_code),
+                    amount=total_amount,
+                    vol=total_vol,
+                    open=open_first,
+                    high=high_max,
+                    low=low_min,
+                    close=close_last
+                )
+                self.dbService.insert(upsert_sql)

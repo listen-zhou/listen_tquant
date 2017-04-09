@@ -275,7 +275,13 @@ class DbService(object):
               "and vol_avg_chg is not null " \
               "and price_avg_chg is not null " \
               "and amount_flow_chg is not null " \
-              "and vol_flow_chg is not null "
+              "and vol_flow_chg is not null " \
+              "and close_avg_chg_avg is not null " \
+              "and amount_avg_chg_avg is not null " \
+              "and vol_avg_chg_avg is not null " \
+              "and price_avg_chg_avg is not null " \
+              "and amount_flow_chg_avg is not null " \
+              "and vol_flow_chg_avg is not null "
         the_date = self.query(sql.format(security_code=Utils.quotes_surround(security_code),
                                                    exchange_code=Utils.quotes_surround(exchange_code),
                                                    ma=ma
@@ -300,4 +306,15 @@ class DbService(object):
         if the_date is not None and the_date != '':
             decline_ma_the_date = the_date[0][0]
             return decline_ma_the_date
+        return None
+
+    def get_day_kline_exist_max_the_date(self, security_code, exchange_code):
+        sql = "select max(the_date) from tquant_stock_day_kline " \
+              "where security_code = {security_code} and exchange_code = {exchange_code}"
+        sql = sql.format(security_code=Utils.quotes_surround(security_code),
+                         exchange_code=Utils.quotes_surround(exchange_code))
+        the_date = self.query(sql)
+        if the_date is not None and len(the_date) > 0:
+            the_date = the_date[0][0]
+            return the_date
         return None
