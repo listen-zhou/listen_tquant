@@ -188,6 +188,10 @@ class StockOneStepBusinessService(Service):
             start_log_list.append(security_code)
             start_log_list.append('exchange_code')
             start_log_list.append(exchange_code)
+            start_log_list.append('is_reset')
+            start_log_list.append(self.is_reset)
+            start_log_list.append('recent_few_days')
+            start_log_list.append(recent_few_days)
             start_log_list.append('【start】...')
             self.logger.base_log(start_log_list)
 
@@ -196,7 +200,9 @@ class StockOneStepBusinessService(Service):
             else:
                 result = tt.get_last_n_daybar(security_code, recent_few_days, 'qfq')
 
-            if result is not None and result.empty is False:
+            # self.logger.base_log(['result', result])
+
+            if result.empty == False:
                 # 索引值为日期
                 indexes_values = result.index.values
                 # 临时存储批量更新sql的列表
@@ -433,6 +439,7 @@ class StockOneStepBusinessService(Service):
             # 切片元组，每相连的2个一组
             section_idx = i + 2
             if section_idx > len_result:
+                i += 1
                 break
             temp_kline_tuple = result[i:section_idx]
             # 返回值格式list [the_date, close1, close_change_percent, amount1, amount_change_percent, vol1, vol_change_percent]
@@ -1045,7 +1052,7 @@ class StockOneStepBusinessService(Service):
         print('today', today, 'max_the_date', max_the_date)
         if max_the_date is not None:
             # 如果max_the_date < today，则说明今天的日K数据还没有入库，需要进行实时行情查询处理
-            if max_the_date < today:
+            if max_the_date <= today:
                 thread = threading.Thread(target=self.processing_real_time_kline,
                                           args=(security_code, exchange_code
                                                 )
@@ -1114,8 +1121,8 @@ class StockOneStepBusinessService(Service):
             end_date = datetime.datetime.now()
             start_date = end_date.replace(hour=9, minute=30, second=0, microsecond=0)
             end_date = end_date.replace(hour=15, minute=0, second=0, microsecond=0)
+            sleep_seconds = 180
             if curent_date > end_date or curent_date < start_date:
-                sleep_seconds = 10
                 sleep_log_list = Utils.deepcopy_list(self.log_list)
                 sleep_log_list.append(self.get_method_name())
                 sleep_log_list.append('security_code')
@@ -1140,6 +1147,26 @@ class StockOneStepBusinessService(Service):
                 self.analysis_real_time_kline(security_code, exchange_code, day_kline, start_date)
                 # 股票日K涨跌幅处理方法
                 self.procesing_day_kline_after(security_code, exchange_code)
+                # 往队列发送消息通知有新数据了，可以往页面推送了
+                self.redisService.product_average_line_message(security_code, exchange_code)
+
+                sleep_log_list = Utils.deepcopy_list(self.log_list)
+                sleep_log_list.append(self.get_method_name())
+                sleep_log_list.append('security_code')
+                sleep_log_list.append(security_code)
+                sleep_log_list.append('exchange_code')
+                sleep_log_list.append(exchange_code)
+                sleep_log_list.append('curent_date')
+                sleep_log_list.append(curent_date)
+                sleep_log_list.append('start_date')
+                sleep_log_list.append(start_date)
+                sleep_log_list.append('end_date')
+                sleep_log_list.append(end_date)
+                sleep_log_list.append('processing done')
+                sleep_log_list.append('【sleep】 seconds')
+                sleep_log_list.append(sleep_seconds)
+                self.logger.base_log(sleep_log_list)
+                time.sleep(sleep_seconds)
 
             end_while_log_list = Utils.deepcopy_list(self.log_list)
             end_while_log_list.append(self.get_method_name())
@@ -1161,7 +1188,7 @@ class StockOneStepBusinessService(Service):
         :param start_date: 
         :return: 
         """
-        if day_kline:
+        if day_kline.empty == False:
             indexes_values = day_kline.index.values
             the_date = None
             high_max = None
