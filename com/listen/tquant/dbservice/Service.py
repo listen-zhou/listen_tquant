@@ -167,7 +167,7 @@ class DbService(object):
         return None
 
     def get_stock_day_kline(self, security_code, exchange_code, decline_ma_the_date):
-        sql = "select the_date, close, amount, vol " \
+        sql = "select the_date, close, amount, vol, price_avg " \
               "from tquant_stock_day_kline " \
               "where security_code = {security_code} " \
               "and exchange_code = {exchange_code} "
@@ -225,7 +225,7 @@ class DbService(object):
         sql = "select the_date max_the_date from tquant_stock_day_kline " \
               "where security_code = {security_code} " \
               "and exchange_code = {exchange_code} " \
-              "and previous_close is not null and close_change_percent is not null " \
+              "and close_pre is not null and close_chg is not null " \
               "order by the_date desc limit 2"
         the_date = self.query(sql.format(security_code=Utils.quotes_surround(security_code),
                                          exchange_code=Utils.quotes_surround(exchange_code)

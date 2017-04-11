@@ -1,50 +1,33 @@
-# 均线数据和日K数据量对比结果查询，语气，单只股票的日K总量=单只股票均线数据总量+ma-1，如果是这样就有问题
-select c.security_code, c.exchange_code from (
-select a.security_code, a.exchange_code, a.k_count,
- b.avg_count ,b.ma, (a.k_count-b.avg_count + 1) diff
-from (
-select security_code, exchange_code, count(*) k_count from tquant_stock_day_kline
-group by security_code, exchange_code) a
-left join
+select kline.the_date, kline.open, kline.high, kline.low, kline.close, kline.close_chg, kline.close_price_avg_chg, ma10close_ma_price_avg_chg, 
+kline.amount, kline.vol, 
+kline.price_avg, kline.price_avg_chg, 
+ma3_price_avg, ma3_price_avg_chg, 
+
+ma5_price_avg, ma5_price_avg_chg,
+
+
+ma10_price_avg, ma10_price_avg_chg, ma10_price_avg_chg_avg 
+
+
+from 
+tquant_stock_day_kline kline 
+left join 
 (
-select security_code, exchange_code, ma, count(*) avg_count from tquant_stock_average_line
-group by security_code, exchange_code, ma
-)b
-on a.security_code = b.security_code
-and b.exchange_code = a.exchange_code
-having (a.k_count-b.avg_count + 1) != b.ma
-) c
-group by c.security_code, c.exchange_code;
-
-
---------------------------
-# 查询不符合处理涨跌幅均的数据有哪些
-select security_code, ma, count(*) from tquant_stock_average_line
-where amount_avg_chg  is null
-or vol_avg_chg is null
-or price_avg_chg is null
-or amount_flow_chg is null
-or vol_flow_chg is null
-group by security_code, ma
-# 把涨跌幅均数据清空，重新跑
--- update tquant_stock_average_line set amount_avg_chg_avg = null
-and vol_avg_chg_avg = null
-and price_avg_chg_avg = null
-and amount_flow_chg_avg = null
-and vol_flow_chg_avg = null
-
-# 检验涨跌幅均数据是否完整
-select security_code, ma, count(*)
-from (
-select security_code, exchange_code, ma
- from tquant_stock_average_line
-where ma = 3
-and amount_avg_chg_avg  is null
-and vol_avg_chg_avg is null
-and price_avg_chg_avg is null
-and amount_flow_chg_avg is null
-and vol_flow_chg_avg is null
-) b
-group by security_code, ma
-having count(*) > (ma -1)
-;
+select security_code, the_date, price_avg ma3_price_avg, price_avg_chg ma3_price_avg_chg
+ from tquant_stock_average_line 
+where ma = 3 and security_code = '002466' and the_date >= '2017-03-09' and the_date <= '2017-04-11'
+) ma3 
+on kline.security_code = ma3.security_code and kline.the_date = ma3.the_date
+left join 
+(select security_code, the_date, price_avg ma5_price_avg, price_avg_chg ma5_price_avg_chg from tquant_stock_average_line 
+where ma = 5 and security_code = '002466' and the_date >= '2017-03-09' and the_date <= '2017-04-11'
+) ma5 
+on kline.security_code = ma5.security_code and kline.the_date = ma5.the_date
+left join 
+(select security_code, the_date, price_avg ma10_price_avg, price_avg_chg ma10_price_avg_chg, 
+price_avg_chg_avg ma10_price_avg_chg_avg, close_ma_price_avg_chg ma10close_ma_price_avg_chg 
+ from tquant_stock_average_line 
+where ma = 10 and security_code = '002466' and the_date >= '2017-03-09' and the_date <= '2017-04-11'
+) ma10 
+on kline.security_code = ma10.security_code and kline.the_date = ma10.the_date
+order by kline.the_date desc 

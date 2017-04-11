@@ -2,6 +2,8 @@
 import threading
 
 import datetime
+import traceback
+
 import tquant as tt
 import sys
 import numpy
@@ -29,44 +31,9 @@ class StockOneStepBusinessService(Service):
                   'amount=values(amount), vol=values(vol), open=values(open), ' \
                   'high=values(high), low=values(low), close=values(close) '
 
-    """
-    日K涨跌幅数据入库
-    """
-    upsert_day_kline_change_percent = 'insert into tquant_stock_day_kline (security_code, the_date, exchange_code, ' \
-                  'previous_close, close_change_percent, ' \
-                  'previous_amount, amount_change_percent, ' \
-                  'previous_vol, vol_change_percent) ' \
-                  'values ({security_code}, {the_date}, {exchange_code}, ' \
-                  '{previous_close}, {close_change_percent},' \
-                  '{previous_amount}, {amount_change_percent}, {previous_vol}, {vol_change_percent}) ' \
-                  'on duplicate key update ' \
-                  'previous_close=values(previous_close), close_change_percent=values(close_change_percent), ' \
-                  'previous_amount=values(previous_amount), amount_change_percent=values(amount_change_percent), ' \
-                  'previous_vol=values(previous_vol), vol_change_percent=values(vol_change_percent)'
+    
 
-    """
-    均线数据入库（3,5,10日等）
-    """
-    upsert_average_line = 'insert into tquant_stock_average_line (security_code, the_date, exchange_code, ' \
-                  'ma, ' \
-                  'close, close_avg, close_pre_avg, close_avg_chg, ' \
-                  'amount, amount_avg, amount_pre_avg, amount_avg_chg, ' \
-                  'vol, vol_avg, vol_pre_avg, vol_avg_chg, ' \
-                  'price_avg, price_pre_avg, price_avg_chg, ' \
-                  'amount_flow_chg, vol_flow_chg) ' \
-                  'values ({security_code}, {the_date}, {exchange_code}, ' \
-                  '{ma}, ' \
-                  '{close}, {close_avg}, {close_pre_avg}, {close_avg_chg}, ' \
-                  '{amount}, {amount_avg}, {amount_pre_avg}, {amount_avg_chg}, ' \
-                  '{vol}, {vol_avg}, {vol_pre_avg}, {vol_avg_chg}, ' \
-                  '{price_avg}, {price_pre_avg}, {price_avg_chg}, ' \
-                  '{amount_flow_chg}, {vol_flow_chg}) ' \
-                  'on duplicate key update ' \
-                  'close=values(close), close_avg=values(close_avg), close_pre_avg=values(close_pre_avg), close_avg_chg=values(close_avg_chg), ' \
-                  'amount=values(amount), amount_avg=values(amount_avg), amount_pre_avg=values(amount_pre_avg), amount_avg_chg=values(amount_avg_chg), ' \
-                  'vol=values(vol), vol_avg=values(vol_avg), vol_pre_avg=values(vol_pre_avg), vol_avg_chg=values(vol_avg_chg), ' \
-                  'price_avg=values(price_avg), price_pre_avg=values(price_pre_avg), price_avg_chg=values(price_avg_chg), ' \
-                  'amount_flow_chg=values(amount_flow_chg), vol_flow_chg=values(vol_flow_chg) '
+
 
     """
     均线数据涨跌幅均值数入库
@@ -240,7 +207,7 @@ class StockOneStepBusinessService(Service):
                             upsert_sql_list = []
                             if upsert_sql is not None:
                                 upsert_sql_list.append(upsert_sql)
-                            progress = Utils.base_round(add_up / len_indexes * 100, 2)
+                            progress = Utils.base_round(Utils.division_zero(add_up, len_indexes) * 100, 2)
 
                             progress_log_list = Utils.deepcopy_list(self.log_list)
                             progress_log_list.append(self.get_method_name())
@@ -260,7 +227,7 @@ class StockOneStepBusinessService(Service):
                     if len(upsert_sql_list) > 0:
                         self.dbService.insert_many(upsert_sql_list)
                         process_line += '='
-                    progress = Utils.base_round(add_up / len(indexes_values) * 100, 2)
+                    progress = Utils.base_round(Utils.division_zero(add_up, len(indexes_values)) * 100, 2)
 
                     progress_log_list = Utils.deepcopy_list(self.log_list)
                     progress_log_list.append(self.get_method_name())
@@ -295,12 +262,15 @@ class StockOneStepBusinessService(Service):
 
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
+            line_no = traceback.extract_stack()[-2][1]
             error_log_list = Utils.deepcopy_list(self.log_list)
             error_log_list.append(self.get_method_name())
             error_log_list.append('security_code')
             error_log_list.append(security_code)
             error_log_list.append('exchange_code')
             error_log_list.append(exchange_code)
+            error_log_list.append('line_no')
+            error_log_list.append(line_no)
             error_log_list.append(exc_type)
             error_log_list.append(exc_value)
             error_log_list.append(exc_traceback)
@@ -393,8 +363,11 @@ class StockOneStepBusinessService(Service):
             return [the_date, amount, vol, open, high, low, close]
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
+            line_no = traceback.extract_stack()[-2][1]
             error_log_list = Utils.deepcopy_list(self.log_list)
             error_log_list.append(self.get_method_name())
+            error_log_list.append('line_no')
+            error_log_list.append(line_no)
             error_log_list.append(exc_type)
             error_log_list.append(exc_value)
             error_log_list.append(exc_traceback)
@@ -423,7 +396,7 @@ class StockOneStepBusinessService(Service):
             day_kline_max_the_date = self.dbService.get_day_kline_max_the_date(security_code, exchange_code)
         result = self.dbService.get_stock_day_kline(security_code, exchange_code, day_kline_max_the_date)
         len_result = len(result)
-
+        print('result', result)
         if len_result == 0:
             return
 
@@ -435,6 +408,7 @@ class StockOneStepBusinessService(Service):
         process_line = ''
         # 循环处理security_code的股票日K数据
         i = 0
+        price_avg_pre = None
         while i < len_result:
             # 切片元组，每相连的2个一组
             section_idx = i + 2
@@ -442,20 +416,44 @@ class StockOneStepBusinessService(Service):
                 i += 1
                 break
             temp_kline_tuple = result[i:section_idx]
-            # 返回值格式list [the_date, close1, close_change_percent, amount1, amount_change_percent, vol1, vol_change_percent]
-            list_data = self.analysis_day_kline_change_percent(temp_kline_tuple)
+            # 返回值格式list [the_date, close1, close_chg, amount1, amount_chg, vol1, vol_chg, 
+            # price_avg, close_price_avg_chg, price_avg_chg]
+            list_data = self.analysis_day_kline_change_percent(temp_kline_tuple, price_avg_pre)
+            print(temp_kline_tuple)
+            print(price_avg_pre)
             if list_data is not None:
-                upsert_sql = StockOneStepBusinessService.upsert_day_kline_change_percent.format(
+                """
+                日K涨跌幅数据入库
+                """
+                upsert_sql = 'insert into tquant_stock_day_kline (security_code, the_date, exchange_code, ' \
+                              'close_pre, close_chg, ' \
+                              'amount_pre, amount_chg, ' \
+                              'vol_pre, vol_chg, ' \
+                             'price_avg, close_price_avg_chg, price_avg_chg) ' \
+                              'values ({security_code}, {the_date}, {exchange_code}, ' \
+                              '{close_pre}, {close_chg},' \
+                              '{amount_pre}, {amount_chg}, {vol_pre}, {vol_chg}, ' \
+                             '{price_avg}, {close_price_avg_chg}, {price_avg_chg}) ' \
+                              'on duplicate key update ' \
+                              'close_pre=values(close_pre), close_chg=values(close_chg), ' \
+                              'amount_pre=values(amount_pre), amount_chg=values(amount_chg), ' \
+                              'vol_pre=values(vol_pre), vol_chg=values(vol_chg), ' \
+                             'price_avg=values(price_avg), close_price_avg_chg=values(close_price_avg_chg), price_avg_chg=values(price_avg_chg)'
+                upsert_sql = upsert_sql.format(
                     security_code=Utils.quotes_surround(security_code),
                     the_date=Utils.quotes_surround(list_data[0].strftime('%Y-%m-%d')),
                     exchange_code=Utils.quotes_surround(exchange_code),
-                    previous_close=list_data[1],
-                    close_change_percent=list_data[2],
-                    previous_amount=list_data[3],
-                    amount_change_percent=list_data[4],
-                    previous_vol=list_data[5],
-                    vol_change_percent=list_data[6]
+                    close_pre=list_data[1],
+                    close_chg=list_data[2],
+                    amount_pre=list_data[3],
+                    amount_chg=list_data[4],
+                    vol_pre=list_data[5],
+                    vol_chg=list_data[6],
+                    price_avg=list_data[7],
+                    close_price_avg_chg=list_data[8],
+                    price_avg_chg=list_data[9]
                 )
+                price_avg_pre = list_data[7]
             else:
                 upsert_sql = None
             # 批量(100)提交数据更新
@@ -466,7 +464,7 @@ class StockOneStepBusinessService(Service):
                 if upsert_sql is not None:
                     upsert_sql_list.append(upsert_sql)
                 # 这个地方为什么要add_up + 1？因为第一条数据不会被处理，所以总数会少一条，所以在计算进度的时候要+1
-                progress = Utils.base_round((add_up + 1) / len_result * 100, 2)
+                progress = Utils.base_round(Utils.division_zero((add_up + 1), len_result) * 100, 2)
 
                 progress_log_list = Utils.deepcopy_list(self.log_list)
                 progress_log_list.append(self.get_method_name())
@@ -489,7 +487,7 @@ class StockOneStepBusinessService(Service):
         if len(upsert_sql_list) > 0:
             self.dbService.insert_many(upsert_sql_list)
             process_line += '='
-        progress = Utils.base_round((add_up + 1) / len_result * 100, 2)
+        progress = Utils.base_round(Utils.division_zero((add_up + 1), len_result) * 100, 2)
 
         progress_log_list = Utils.deepcopy_list(self.log_list)
         progress_log_list.append(self.get_method_name())
@@ -514,7 +512,7 @@ class StockOneStepBusinessService(Service):
         self.logger.base_log(end_log_list)
 
 
-    def analysis_day_kline_change_percent(self, temp_kline_tuple):
+    def analysis_day_kline_change_percent(self, temp_kline_tuple, price_avg_pre):
         """
         股票日K涨跌幅计算方法
         :param temp_kline_tuple: 相邻两个日K数据的列表
@@ -536,33 +534,45 @@ class StockOneStepBusinessService(Service):
             # 当前交易量
             vol2 = temp_kline_tuple[1][3]
 
+            if price_avg_pre is None :
+                price_avg_pre = temp_kline_tuple[0][4]
+
             # 涨跌幅(百分比)计算:当日(收盘价-前一日收盘价)/前一日收盘价 * 100
-            close_change_percent = None
+            close_chg = None
             if close1 is not None and close1 != 0:
-                close_change_percent = Utils.base_round(((close2 - close1) / close1) * 100, 2)
+                close_chg = Utils.base_round(Utils.division_zero((close2 - close1), close1) * 100, 2)
             else:
                 close1 = 0
-                close_change_percent = 0
+                close_chg = 0
 
-            amount_change_percent = None
+            amount_chg = None
             if amount1 is not None and amount1 != 0:
-                amount_change_percent = Utils.base_round(((amount2 - amount1) / amount1) * 100, 2)
+                amount_chg = Utils.base_round(Utils.division_zero((amount2 - amount1), amount1) * 100, 2)
             else:
                 amount1 = 0
-                amount_change_percent = 0
+                amount_chg = 0
 
-            vol_change_percent = None
+            vol_chg = None
             if vol1 is not None and vol1 != 0:
-                vol_change_percent = Utils.base_round(((vol2 - vol1) / vol1) * 100, 2)
+                vol_chg = Utils.base_round(Utils.division_zero((vol2 - vol1), vol1) * 100, 2)
             else:
                 vol1 = 0
-                vol_change_percent = 0
+                vol_chg = 0
 
-            return [the_date, close1, close_change_percent, amount1, amount_change_percent, vol1, vol_change_percent]
+            price_avg = Utils.base_round_zero(Utils.division_zero(amount2, vol2), 2)
+            close_price_avg_chg = Utils.base_round_zero(Utils.division_zero(close2 - price_avg, price_avg) * 100, 2)
+            if price_avg_pre is None :
+                price_avg_pre = 0
+            price_avg_chg = Utils.base_round_zero(Utils.division_zero(price_avg - price_avg_pre, price_avg_pre) * 100, 2)
+
+            return [the_date, close1, close_chg, amount1, amount_chg, vol1, vol_chg, price_avg, close_price_avg_chg, price_avg_chg]
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
+            line_no = traceback.extract_stack()[-2][1]
             error_log_list = Utils.deepcopy_list(self.log_list)
             error_log_list.append(self.get_method_name())
+            error_log_list.append('line_no')
+            error_log_list.append(line_no)
             error_log_list.append(exc_type)
             error_log_list.append(exc_value)
             error_log_list.append(exc_traceback)
@@ -630,34 +640,58 @@ class StockOneStepBusinessService(Service):
                         # amount, amount_avg, amount_pre_avg, amount_avg_chg,
                         # vol, vol_avg, vol_pre_avg, vol_avg_chg,
                         # price_avg, price_pre_avg, price_avg_chg,
-                        # amount_flow_chg, vol_flow_chg]
+                        # amount_flow_chg, vol_flow_chg, close_ma_price_avg_chg]
                     list_data = self.analysis_average_line(ma, temp_line_tuple, security_code, exchange_code, previous_data)
-                    upsert_sql = StockOneStepBusinessService.upsert_average_line.format(security_code=Utils.quotes_surround(security_code),
-                                                    the_date=Utils.quotes_surround(list_data[0].strftime('%Y-%m-%d')),
-                                                    exchange_code=Utils.quotes_surround(exchange_code),
-                                                    ma=ma,
-                                                    close=list_data[1],
-                                                    close_avg=list_data[2],
-                                                    close_pre_avg=list_data[3],
-                                                    close_avg_chg=list_data[4],
+                    """
+                    均线数据入库（3,5,10日等）
+                    """
+                    upsert_sql = 'insert into tquant_stock_average_line (security_code, the_date, exchange_code, ' \
+                                          'ma, ' \
+                                          'close, close_avg, close_pre_avg, close_avg_chg, ' \
+                                          'amount, amount_avg, amount_pre_avg, amount_avg_chg, ' \
+                                          'vol, vol_avg, vol_pre_avg, vol_avg_chg, ' \
+                                          'price_avg, price_pre_avg, price_avg_chg, ' \
+                                          'amount_flow_chg, vol_flow_chg, close_ma_price_avg_chg) ' \
+                                          'values ({security_code}, {the_date}, {exchange_code}, ' \
+                                          '{ma}, ' \
+                                          '{close}, {close_avg}, {close_pre_avg}, {close_avg_chg}, ' \
+                                          '{amount}, {amount_avg}, {amount_pre_avg}, {amount_avg_chg}, ' \
+                                          '{vol}, {vol_avg}, {vol_pre_avg}, {vol_avg_chg}, ' \
+                                          '{price_avg}, {price_pre_avg}, {price_avg_chg}, ' \
+                                          '{amount_flow_chg}, {vol_flow_chg}, {close_ma_price_avg_chg}) ' \
+                                          'on duplicate key update ' \
+                                          'close=values(close), close_avg=values(close_avg), close_pre_avg=values(close_pre_avg), close_avg_chg=values(close_avg_chg), ' \
+                                          'amount=values(amount), amount_avg=values(amount_avg), amount_pre_avg=values(amount_pre_avg), amount_avg_chg=values(amount_avg_chg), ' \
+                                          'vol=values(vol), vol_avg=values(vol_avg), vol_pre_avg=values(vol_pre_avg), vol_avg_chg=values(vol_avg_chg), ' \
+                                          'price_avg=values(price_avg), price_pre_avg=values(price_pre_avg), price_avg_chg=values(price_avg_chg), ' \
+                                          'amount_flow_chg=values(amount_flow_chg), vol_flow_chg=values(vol_flow_chg), close_ma_price_avg_chg=values(close_ma_price_avg_chg) '
+                    upsert_sql = upsert_sql.format(security_code=Utils.quotes_surround(security_code),
+                                                                                        the_date=Utils.quotes_surround(list_data[0].strftime('%Y-%m-%d')),
+                                                                                        exchange_code=Utils.quotes_surround(exchange_code),
+                                                                                        ma=ma,
+                                                                                        close=list_data[1],
+                                                                                        close_avg=list_data[2],
+                                                                                        close_pre_avg=list_data[3],
+                                                                                        close_avg_chg=list_data[4],
 
-                                                    amount=list_data[5],
-                                                    amount_avg=list_data[6],
-                                                    amount_pre_avg=list_data[7],
-                                                    amount_avg_chg=list_data[8],
+                                                                                        amount=list_data[5],
+                                                                                        amount_avg=list_data[6],
+                                                                                        amount_pre_avg=list_data[7],
+                                                                                        amount_avg_chg=list_data[8],
 
-                                                    vol=list_data[9],
-                                                    vol_avg=list_data[10],
-                                                    vol_pre_avg=list_data[11],
-                                                    vol_avg_chg=list_data[12],
+                                                                                        vol=list_data[9],
+                                                                                        vol_avg=list_data[10],
+                                                                                        vol_pre_avg=list_data[11],
+                                                                                        vol_avg_chg=list_data[12],
 
-                                                    price_avg=list_data[13],
-                                                    price_pre_avg=list_data[14],
-                                                    price_avg_chg=list_data[15],
+                                                                                        price_avg=list_data[13],
+                                                                                        price_pre_avg=list_data[14],
+                                                                                        price_avg_chg=list_data[15],
 
-                                                    amount_flow_chg=list_data[16],
-                                                    vol_flow_chg=list_data[17]
-                                                    )
+                                                                                        amount_flow_chg=list_data[16],
+                                                                                        vol_flow_chg=list_data[17],
+                                                                                        close_ma_price_avg_chg=list_data[18]
+                                                   )
                     # print(upsert_sql)
                     # 将本次的处理结果重新赋值到previous_data中
                     # close_pre_avg, amount_pre_avg, vol_pre_avg, price_pre_avg
@@ -672,7 +706,7 @@ class StockOneStepBusinessService(Service):
                         if len_result == ma:
                             progress = Utils.base_round_zero(1 * 100, 2)
                         else:
-                            progress = Utils.base_round_zero(add_up / (len_result - ma + 1) * 100, 2)
+                            progress = Utils.base_round_zero(Utils.division_zero(add_up, (len_result - ma + 1)) * 100, 2)
 
                         progress_log_list = Utils.deepcopy_list(self.log_list)
                         progress_log_list.append(self.get_method_name())
@@ -700,7 +734,7 @@ class StockOneStepBusinessService(Service):
                 if len_result == ma:
                     progress = Utils.base_round_zero(1 * 100, 2)
                 else:
-                    progress = Utils.base_round_zero(add_up / (len_result - ma + 1) * 100, 2)
+                    progress = Utils.base_round_zero(Utils.division_zero(add_up, (len_result - ma + 1)) * 100, 2)
 
                 progress_log_list = Utils.deepcopy_list(self.log_list)
                 progress_log_list.append(self.get_method_name())
@@ -718,6 +752,7 @@ class StockOneStepBusinessService(Service):
                 self.logger.base_log(progress_log_list)
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
+            line_no = traceback.extract_stack()[-2][1]
             error_log_list = Utils.deepcopy_list(self.log_list)
             error_log_list.append(self.get_method_name())
             error_log_list.append('ma')
@@ -726,6 +761,8 @@ class StockOneStepBusinessService(Service):
             error_log_list.append(security_code)
             error_log_list.append('exchange_code')
             error_log_list.append(exchange_code)
+            error_log_list.append('line_no')
+            error_log_list.append(line_no)
             error_log_list.append(exc_type)
             error_log_list.append(exc_value)
             error_log_list.append(exc_traceback)
@@ -835,12 +872,14 @@ class StockOneStepBusinessService(Service):
         # if vol_flow_chg is None:
         #     vol_flow_chg = Decimal(0)
 
+        close_ma_price_avg_chg = Utils.base_round_zero(Utils.division_zero(close - price_avg, price_avg) * 100, 2)
+
         return [the_date,
                 close, close_avg, close_pre_avg, close_avg_chg,
                 amount, amount_avg, amount_pre_avg, amount_avg_chg,
                 vol, vol_avg, vol_pre_avg, vol_avg_chg,
                 price_avg, price_pre_avg, price_avg_chg,
-                amount_flow_chg, vol_flow_chg]
+                amount_flow_chg, vol_flow_chg, close_ma_price_avg_chg]
 
     def processing_average_line_avg(self, ma, security_code, exchange_code, is_reset=False):
         """
@@ -916,7 +955,7 @@ class StockOneStepBusinessService(Service):
                         if len_result == ma:
                             progress = Utils.base_round(1 * 100, 2)
                         else:
-                            progress = Utils.base_round(add_up / (len_result - ma + 1) * 100, 2)
+                            progress = Utils.base_round(Utils.division_zero(add_up, (len_result - ma + 1)) * 100, 2)
 
                         progress_log_list = Utils.deepcopy_list(self.log_list)
                         progress_log_list.append(self.get_method_name())
@@ -944,7 +983,7 @@ class StockOneStepBusinessService(Service):
                 if len_result == ma:
                     progress = Utils.base_round(1 * 100, 2)
                 else:
-                    progress = Utils.base_round(add_up / (len_result - ma + 1) * 100, 2)
+                    progress = Utils.base_round(Utils.division_zero(add_up, (len_result - ma + 1)) * 100, 2)
 
                 progress_log_list = Utils.deepcopy_list(self.log_list)
                 progress_log_list.append(self.get_method_name())
@@ -962,6 +1001,7 @@ class StockOneStepBusinessService(Service):
                 self.logger.base_log(progress_log_list)
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
+            line_no = traceback.extract_stack()[-2][1]
             error_log_list = Utils.deepcopy_list(self.log_list)
             error_log_list.append(self.get_method_name())
             error_log_list.append('ma')
@@ -970,6 +1010,8 @@ class StockOneStepBusinessService(Service):
             error_log_list.append(security_code)
             error_log_list.append('exchange_code')
             error_log_list.append(exchange_code)
+            error_log_list.append('line_no')
+            error_log_list.append(line_no)
             error_log_list.append(exc_type)
             error_log_list.append(exc_value)
             error_log_list.append(exc_traceback)
@@ -1122,7 +1164,8 @@ class StockOneStepBusinessService(Service):
             start_date = end_date.replace(hour=9, minute=30, second=0, microsecond=0)
             end_date = end_date.replace(hour=15, minute=0, second=0, microsecond=0)
             sleep_seconds = 180
-            if curent_date > end_date or curent_date < start_date:
+            # if curent_date > end_date or curent_date < start_date:
+            if False:
                 sleep_log_list = Utils.deepcopy_list(self.log_list)
                 sleep_log_list.append(self.get_method_name())
                 sleep_log_list.append('security_code')
@@ -1143,6 +1186,7 @@ class StockOneStepBusinessService(Service):
             else:
                 # 5分钟K的实时行情
                 day_kline = tt.get_stock_bar(security_code, 1)
+                print('day_kline', day_kline)
                 # 处理单只股票的实时行情，并入库
                 self.analysis_real_time_kline(security_code, exchange_code, day_kline, start_date)
                 # 股票日K涨跌幅处理方法
@@ -1162,7 +1206,7 @@ class StockOneStepBusinessService(Service):
                 sleep_log_list.append(start_date)
                 sleep_log_list.append('end_date')
                 sleep_log_list.append(end_date)
-                sleep_log_list.append('processing done')
+                sleep_log_list.append('【processing done】')
                 sleep_log_list.append('【sleep】 seconds')
                 sleep_log_list.append(sleep_seconds)
                 self.logger.base_log(sleep_log_list)
