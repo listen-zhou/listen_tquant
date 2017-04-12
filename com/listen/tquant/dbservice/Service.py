@@ -184,13 +184,15 @@ class DbService(object):
         return result
 
     def get_previous_average_line(self, ma, security_code, exchange_code, the_date):
-        sql = "select close_pre_avg, amount_pre_avg, vol_pre_avg, price_pre_avg from tquant_stock_average_line " \
+        sql = "select close_avg, amount_avg, vol_avg, price_avg, the_date " \
+              "from tquant_stock_average_line " \
               "where security_code = {security_code} " \
               "and exchange_code = {exchange_code} and ma = {ma} and the_date < {the_date} " \
               "order by the_date desc limit 1".format(security_code=Utils.quotes_surround(security_code),
                                                       exchange_code=Utils.quotes_surround(exchange_code),
                                                       ma=ma,
                                                       the_date=Utils.quotes_surround(the_date.strftime('%Y-%m-%d')))
+        print('get_previous_average_line', sql)
         previous_data = self.query(sql)
         return previous_data
 
@@ -226,16 +228,13 @@ class DbService(object):
               "where security_code = {security_code} " \
               "and exchange_code = {exchange_code} " \
               "and close_pre is not null and close_chg is not null " \
-              "order by the_date desc limit 2"
+              "order by the_date desc limit 1"
         the_date = self.query(sql.format(security_code=Utils.quotes_surround(security_code),
                                          exchange_code=Utils.quotes_surround(exchange_code)
                                         )
                               )
         if the_date is not None and len(the_date) > 0:
-            if len(the_date) == 2:
-                return the_date[1][0]
-            else:
-                return the_date[0][0]
+            return the_date[0][0]
         else:
             return None
 
@@ -244,17 +243,14 @@ class DbService(object):
               "where security_code = {security_code} " \
               "and exchange_code = {exchange_code} " \
               "and ma = {ma} " \
-              "order by the_date desc limit 2"
+              "order by the_date desc limit 1"
         the_date = self.query(sql.format(security_code=Utils.quotes_surround(security_code),
                                          exchange_code=Utils.quotes_surround(exchange_code),
                                          ma=ma
                                          )
                               )
         if the_date is not None and len(the_date) > 0:
-            if len(the_date) == 2:
-                return the_date[1][0]
-            else:
-                return the_date[0][0]
+            return the_date[0][0]
         else:
             return None
 
@@ -265,9 +261,12 @@ class DbService(object):
                   "order by the_date desc limit {ma}) a"
         else:
             sql = "select min(the_date) from tquant_calendar_info"
-        the_date = self.query(sql.format(average_line_max_the_date=Utils.quotes_surround(str(average_line_max_the_date)),
-                                                   ma=ma)
-                                        )
+        sql = sql.format(average_line_max_the_date=Utils.quotes_surround(str(average_line_max_the_date)),
+                        ma=ma
+                         )
+        print(sql)
+        the_date = self.query(sql)
+        print('average_line_decline_max_the_date', the_date)
         if the_date is not None and the_date != '':
             decline_ma_the_date = the_date[0][0]
             return decline_ma_the_date
@@ -291,17 +290,14 @@ class DbService(object):
               "and price_avg_chg_avg is not null " \
               "and amount_flow_chg_avg is not null " \
               "and vol_flow_chg_avg is not null " \
-              "order by the_date desc limit 2"
+              "order by the_date desc limit 1"
         the_date = self.query(sql.format(security_code=Utils.quotes_surround(security_code),
                                                    exchange_code=Utils.quotes_surround(exchange_code),
                                                    ma=ma
                                          )
                               )
         if the_date is not None and len(the_date) > 0:
-            if len(the_date) == 2:
-                return the_date[1][0]
-            else:
-                return the_date[0][0]
+            return the_date[0][0]
         else:
             return None
 
@@ -325,14 +321,11 @@ class DbService(object):
     def get_day_kline_exist_max_the_date(self, security_code, exchange_code):
         sql = "select the_date from tquant_stock_day_kline " \
               "where security_code = {security_code} and exchange_code = {exchange_code} " \
-              "order by the_date desc limit 2 "
+              "order by the_date desc limit 1 "
         sql = sql.format(security_code=Utils.quotes_surround(security_code),
                          exchange_code=Utils.quotes_surround(exchange_code))
         the_date = self.query(sql)
         if the_date is not None and len(the_date) > 0:
-            if len(the_date) == 2:
-                return the_date[1][0]
-            else:
-                return the_date[0][0]
+            return the_date[0][0]
         else:
             return None

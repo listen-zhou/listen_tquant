@@ -374,7 +374,7 @@ class StockOneStepBusinessService(Service):
             self.logger.base_log(error_log_list, logging.ERROR)
             return None
 
-    def processing_day_kline_change_percent(self, security_code, exchange_code, is_reset=False):
+    def processing_day_kline_change_percent(self, security_code, exchange_code):
         """
         股票日K数据涨跌幅处理方法
         :param security_code: 股票代码
@@ -390,13 +390,13 @@ class StockOneStepBusinessService(Service):
         start_log_list.append('【start】...')
         self.logger.base_log(start_log_list)
 
-        if is_reset:
+        if self.is_reset:
             day_kline_max_the_date = None
         else:
             day_kline_max_the_date = self.dbService.get_day_kline_max_the_date(security_code, exchange_code)
         result = self.dbService.get_stock_day_kline(security_code, exchange_code, day_kline_max_the_date)
         len_result = len(result)
-        print('result', result)
+        # print('result', result)
         if len_result == 0:
             return
 
@@ -419,8 +419,8 @@ class StockOneStepBusinessService(Service):
             # 返回值格式list [the_date, close1, close_chg, amount1, amount_chg, vol1, vol_chg, 
             # price_avg, close_price_avg_chg, price_avg_chg]
             list_data = self.analysis_day_kline_change_percent(temp_kline_tuple, price_avg_pre)
-            print(temp_kline_tuple)
-            print(price_avg_pre)
+            # print(temp_kline_tuple)
+            # print(price_avg_pre)
             if list_data is not None:
                 """
                 日K涨跌幅数据入库
@@ -579,7 +579,7 @@ class StockOneStepBusinessService(Service):
             self.logger.base_log(error_log_list, logging.ERROR)
             return None
 
-    def processing_average_line(self, ma, security_code, exchange_code, is_reset=False):
+    def processing_average_line(self, ma, security_code, exchange_code):
         """
         股票均线数据处理方法
         :param ma: 
@@ -598,13 +598,16 @@ class StockOneStepBusinessService(Service):
         start_log_list.append('【start】...')
         self.logger.base_log(start_log_list)
 
-        if is_reset:
+        average_line_max_the_date = None
+        if self.is_reset:
             decline_ma_the_date = None
         else:
             average_line_max_the_date = self.dbService.get_average_line_max_the_date(ma, security_code, exchange_code)
             decline_ma_the_date = self.dbService.get_average_line_decline_max_the_date(ma, average_line_max_the_date)
+        print('decline_ma_the_date', decline_ma_the_date, 'average_line_max_the_date', average_line_max_the_date)
         result = self.dbService.get_stock_day_kline(security_code, exchange_code, decline_ma_the_date)
         len_result = len(result)
+        print('ma', ma, 'len_result', len_result)
         if len_result < ma:
             return
         try:
@@ -641,6 +644,7 @@ class StockOneStepBusinessService(Service):
                         # vol, vol_avg, vol_pre_avg, vol_avg_chg,
                         # price_avg, price_pre_avg, price_avg_chg,
                         # amount_flow_chg, vol_flow_chg, close_ma_price_avg_chg]
+                    print('the_date', the_date, 'previous_data', previous_data)
                     list_data = self.analysis_average_line(ma, temp_line_tuple, security_code, exchange_code, previous_data)
                     """
                     均线数据入库（3,5,10日等）
@@ -861,6 +865,7 @@ class StockOneStepBusinessService(Service):
         # if price_pre_avg is not None and price_pre_avg != Decimal(0):
         #     price_avg_chg = self.base_round_zero(self.division_zero((price_avg - price_pre_avg), price_pre_avg) * 100, 2)
         price_avg_chg = Utils.base_round_zero(Utils.division_zero((price_avg - price_pre_avg), price_pre_avg) * 100, 2)
+        print('price_avg', price_avg, 'price_pre_avg', price_pre_avg, 'price_avg_chg', price_avg_chg)
 
         # 日金钱流向涨跌幅=日成交额/ma日(含)均成交额 * 100
         amount_flow_chg = Utils.base_round_zero(Utils.division_zero(amount - amount_avg, amount_avg), 2)
@@ -881,7 +886,7 @@ class StockOneStepBusinessService(Service):
                 price_avg, price_pre_avg, price_avg_chg,
                 amount_flow_chg, vol_flow_chg, close_ma_price_avg_chg]
 
-    def processing_average_line_avg(self, ma, security_code, exchange_code, is_reset=False):
+    def processing_average_line_avg(self, ma, security_code, exchange_code):
         """
         股票均线数据涨跌幅平均数据处理方法
         :param ma: 均线类型
@@ -900,7 +905,7 @@ class StockOneStepBusinessService(Service):
         start_log_list.append('【start】...')
         self.logger.base_log(start_log_list)
 
-        if is_reset:
+        if self.is_reset:
             decline_ma_the_date = None
         else:
             average_line_avg_max_the_date = self.dbService.get_average_line_avg_max_the_date(ma, security_code, exchange_code)
@@ -1186,7 +1191,7 @@ class StockOneStepBusinessService(Service):
             else:
                 # 5分钟K的实时行情
                 day_kline = tt.get_stock_bar(security_code, 1)
-                print('day_kline', day_kline)
+                # print('day_kline', day_kline)
                 # 处理单只股票的实时行情，并入库
                 self.analysis_real_time_kline(security_code, exchange_code, day_kline, start_date)
                 # 股票日K涨跌幅处理方法
