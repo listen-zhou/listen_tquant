@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-
+import datetime
 import pymysql
 import configparser
 import os
@@ -110,7 +110,7 @@ class DbService(object):
             # 分组数，取整数，即批量的倍数
             multiple = size // batch_size
             total = remainder + multiple
-            print('size:', size, 'batch:', batch_size, 'remainder:', remainder, 'multiple:', multiple, 'total:', total)
+            # print('size:', size, 'batch:', batch_size, 'remainder:', remainder, 'multiple:', multiple, 'total:', total)
             i = 0
             while i < total:
                 # 如果是最后一组，则取全量
@@ -192,7 +192,7 @@ class DbService(object):
                                                       exchange_code=Utils.quotes_surround(exchange_code),
                                                       ma=ma,
                                                       the_date=Utils.quotes_surround(the_date.strftime('%Y-%m-%d')))
-        print('get_previous_average_line', sql)
+        # print('get_previous_average_line', sql)
         previous_data = self.query(sql)
         return previous_data
 
@@ -228,13 +228,16 @@ class DbService(object):
               "where security_code = {security_code} " \
               "and exchange_code = {exchange_code} " \
               "and close_pre is not null and close_chg is not null " \
-              "order by the_date desc limit 1"
+              "order by the_date desc limit 2"
         the_date = self.query(sql.format(security_code=Utils.quotes_surround(security_code),
                                          exchange_code=Utils.quotes_surround(exchange_code)
                                         )
                               )
         if the_date is not None and len(the_date) > 0:
-            return the_date[0][0]
+            if len(the_date) == 2:
+                return the_date[1][0]
+            else:
+                return the_date[0][0]
         else:
             return None
 
@@ -264,9 +267,9 @@ class DbService(object):
         sql = sql.format(average_line_max_the_date=Utils.quotes_surround(str(average_line_max_the_date)),
                         ma=ma
                          )
-        print(sql)
+        # print(sql)
         the_date = self.query(sql)
-        print('average_line_decline_max_the_date', the_date)
+        # print('average_line_decline_max_the_date', the_date)
         if the_date is not None and the_date != '':
             decline_ma_the_date = the_date[0][0]
             return decline_ma_the_date
@@ -319,13 +322,26 @@ class DbService(object):
             return None
 
     def get_day_kline_exist_max_the_date(self, security_code, exchange_code):
-        sql = "select the_date from tquant_stock_day_kline " \
-              "where security_code = {security_code} and exchange_code = {exchange_code} " \
-              "order by the_date desc limit 1 "
+        sql = "select max(the_date) from tquant_stock_day_kline " \
+              "where security_code = {security_code} and exchange_code = {exchange_code} "
         sql = sql.format(security_code=Utils.quotes_surround(security_code),
                          exchange_code=Utils.quotes_surround(exchange_code))
         the_date = self.query(sql)
+        # print(sql)
         if the_date is not None and len(the_date) > 0:
             return the_date[0][0]
         else:
             return None
+
+    def get_day_kline_recentdays(self, security_code, exchange_code):
+        max_the_date = self.get_day_kline_exist_max_the_date(security_code, exchange_code)
+        print('max_the_date', max_the_date)
+        recentdays = None
+        if max_the_date is not None :
+            today = datetime.datetime.now()
+            max_the_date = datetime.datetime.now().replace(max_the_date.year, max_the_date.month, max_the_date.day)
+            recentdays = (today - max_the_date).days
+        if recentdays is not None:
+            recentdays += 1
+        print('recentdays', recentdays)
+        return recentdays

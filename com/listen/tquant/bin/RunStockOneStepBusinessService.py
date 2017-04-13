@@ -35,9 +35,8 @@ processing_log_list = None
 
 dbService = DbService()
 logger = Logger(level, log_path, log_name, when, interval, backupCount)
-redisService = StockAverageLineRedisService()
 mas = [3, 5, 10]
 tuple_security_codes = [('002466', 'SZ')]
 print('tuple_security_codes len', len(tuple_security_codes), 'batch_num', batch_num)
-service = StockOneStepBusinessService(dbService, logger, mas, tuple_security_codes, redisService, False)
+service = StockOneStepBusinessService(logger, mas, tuple_security_codes, False)
 service.processing()
