@@ -1,6 +1,4 @@
 # coding: utf-8
-import threading
-
 import datetime
 import traceback
 
@@ -60,20 +58,18 @@ class StockOneStepBusinessService(Service):
                   'price_avg_chg_avg=values(price_avg_chg_avg), ' \
                   'amount_flow_chg_avg=values(amount_flow_chg_avg), vol_flow_chg_avg=values(vol_flow_chg_avg) '
 
-    def __init__(self, logger, mas, security_codes, is_reset=False):
+    def __init__(self, logger, mas, security_codes):
         """
         股票行情及衍生数据处理一条龙服务，初始化
         :param dbService: 数据操作对象
         :param logger: 日志记录对象
         :param mas: 均线类型列表，如3,5，10等
         :param security_codes: 股票代码及交易所列表，如[['002466', 'SZ'], ['002460', 'SZ']]
-        :param is_reset: 是否重置所有数据，一般在第一次初始化数据的时候设置为True，其余情况设置为False
         """
         self.dbService = DbService()
         self.logger = logger
         self.mas = mas
         self.security_codes = security_codes
-        self.is_reset = is_reset
         self.log_list = [self.get_classs_name()]
 
         init_log_list = Utils.deepcopy_list(self.log_list)
@@ -82,8 +78,6 @@ class StockOneStepBusinessService(Service):
         init_log_list.append(mas)
         init_log_list.append('security_codes')
         init_log_list.append(security_codes)
-        init_log_list.append('is_reset')
-        init_log_list.append(is_reset)
         self.logger.base_log(init_log_list)
 
     def processing(self):
@@ -91,11 +85,7 @@ class StockOneStepBusinessService(Service):
         股票行情及衍生数据处理入口
         :return: 
         """
-        start_log_list = Utils.deepcopy_list(self.log_list)
-        start_log_list.append(self.get_method_name())
-        start_log_list.append('【start】...')
-        self.logger.base_log(start_log_list)
-
+        self.logger.base_log([self.get_classs_name(), self.get_method_name(), 'into ...'])
         if self.security_codes is not None and len(self.security_codes) > 0:
             for item in self.security_codes:
                 if item is not None and len(item) == 2:
@@ -104,11 +94,6 @@ class StockOneStepBusinessService(Service):
                     # 单只股票处理方法
                     self.processing_single_security_code(security_code, exchange_code)
 
-        end_log_list = Utils.deepcopy_list(self.log_list)
-        end_log_list.append(self.get_method_name())
-        end_log_list.append('【end】')
-        self.logger.base_log(end_log_list)
-
     def processing_single_security_code(self, security_code, exchange_code):
         """
         单只股票处理方法
@@ -116,29 +101,11 @@ class StockOneStepBusinessService(Service):
         :param exchange_code: 交易所代码
         :return: 
         """
-        start_log_list = Utils.deepcopy_list(self.log_list)
-        start_log_list.append(self.get_method_name())
-        start_log_list.append('security_code')
-        start_log_list.append(security_code)
-        start_log_list.append('exchange_code')
-        start_log_list.append(exchange_code)
-        start_log_list.append('【start】...')
-        self.logger.base_log(start_log_list)
-
         # 股票日K数据处理方法
         self.processing_day_kline(security_code, exchange_code)
         # 股票日K数据处理后有关计算的方法
-        self.procesing_day_kline_after(security_code, exchange_code, self.is_reset)
-        self.processing_start_real_time_thread(security_code, exchange_code, False)
-
-        end_log_list = Utils.deepcopy_list(self.log_list)
-        end_log_list.append(self.get_method_name())
-        end_log_list.append('security_code')
-        end_log_list.append(security_code)
-        end_log_list.append('exchange_code')
-        end_log_list.append(exchange_code)
-        end_log_list.append('【end】')
-        self.logger.base_log(end_log_list)
+        self.procesing_day_kline_after(security_code, exchange_code)
+        self.processing_real_time_kline(security_code, exchange_code)
 
     def processing_day_kline(self, security_code, exchange_code):
         """
@@ -148,26 +115,12 @@ class StockOneStepBusinessService(Service):
         :return: 
         """
         try:
-            start_log_list = Utils.deepcopy_list(self.log_list)
-            start_log_list.append(self.get_method_name())
-            start_log_list.append('security_code')
-            start_log_list.append(security_code)
-            start_log_list.append('exchange_code')
-            start_log_list.append(exchange_code)
-            start_log_list.append('is_reset')
-            start_log_list.append(self.is_reset)
-            start_log_list.append('【start】...')
-            self.logger.base_log(start_log_list)
-
-            if self.is_reset:
-                result = tt.get_all_daybar(security_code, 'qfq')
+            recent_few_days = self.dbService.get_day_kline_recentdays(security_code, exchange_code)
+            self.logger.base_log([self.get_classs_name(), self.get_method_name(), security_code, exchange_code, 'recent_few_days', recent_few_days])
+            if recent_few_days is not None and recent_few_days > 0:
+                result = tt.get_last_n_daybar(security_code, recent_few_days, 'qfq')
             else:
-                recent_few_days = self.dbService.get_day_kline_recentdays(security_code, exchange_code)
-                print('recent_few_days', recent_few_days)
-                if recent_few_days is not None and recent_few_days > 0:
-                    result = tt.get_last_n_daybar(security_code, recent_few_days, 'qfq')
-                else:
-                    result = tt.get_all_daybar(security_code, 'qfq')
+                result = tt.get_all_daybar(security_code, 'qfq')
 
             # self.logger.base_log(['result', result])
 
@@ -278,48 +231,22 @@ class StockOneStepBusinessService(Service):
             error_log_list.append(exc_traceback)
             self.logger.base_log(error_log_list, logging.ERROR)
 
-        end_log_list = Utils.deepcopy_list(self.log_list)
-        end_log_list.append(self.get_method_name())
-        end_log_list.append('security_code')
-        end_log_list.append(security_code)
-        end_log_list.append('exchange_code')
-        end_log_list.append(exchange_code)
-        end_log_list.append('【end】')
-        self.logger.base_log(end_log_list)
-
-    def procesing_day_kline_after(self, security_code, exchange_code, is_reset=False):
+    def procesing_day_kline_after(self, security_code, exchange_code):
         """
         日K数据入库后计算涨跌幅，均线，均值等数据，并入库
         :param security_code: 股票代码
         :param exchange_code: 交易所
         :return: 
         """
-        start_log_list = Utils.deepcopy_list(self.log_list)
-        start_log_list.append(self.get_method_name())
-        start_log_list.append('security_code')
-        start_log_list.append(security_code)
-        start_log_list.append('exchange_code')
-        start_log_list.append(exchange_code)
-        start_log_list.append('【start】...')
-        self.logger.base_log(start_log_list)
-
         # 股票日K涨跌幅处理方法
-        self.processing_day_kline_change_percent(security_code, exchange_code, is_reset)
+        self.logger.base_log([self.get_classs_name(), self.get_method_name(), security_code, exchange_code])
+        self.processing_day_kline_change_percent(security_code, exchange_code)
         if self.mas is not None and len(self.mas) > 0:
             for ma in self.mas:
                 # 股票均线数据处理方法
-                self.processing_average_line(ma, security_code, exchange_code, is_reset)
+                self.processing_average_line(ma, security_code, exchange_code)
                 # 股票均线数据平均值处理方法
-                self.processing_average_line_avg(ma, security_code, exchange_code, is_reset)
-
-        end_log_list = Utils.deepcopy_list(self.log_list)
-        end_log_list.append(self.get_method_name())
-        end_log_list.append('security_code')
-        end_log_list.append(security_code)
-        end_log_list.append('exchange_code')
-        end_log_list.append(exchange_code)
-        end_log_list.append('【end】')
-        self.logger.base_log(end_log_list)
+                self.processing_average_line_avg(ma, security_code, exchange_code)
 
     def analysis_columns_day_kline(self, day_kline, idx):
         """
@@ -376,26 +303,15 @@ class StockOneStepBusinessService(Service):
             self.logger.base_log(error_log_list, logging.ERROR)
             return None
 
-    def processing_day_kline_change_percent(self, security_code, exchange_code, is_reset=False):
+    def processing_day_kline_change_percent(self, security_code, exchange_code):
         """
         股票日K数据涨跌幅处理方法
         :param security_code: 股票代码
         :param exchange_code: 交易所代码
         :return: 
         """
-        start_log_list = Utils.deepcopy_list(self.log_list)
-        start_log_list.append(self.get_method_name())
-        start_log_list.append('security_code')
-        start_log_list.append(security_code)
-        start_log_list.append('exchange_code')
-        start_log_list.append(exchange_code)
-        start_log_list.append('【start】...')
-        self.logger.base_log(start_log_list)
-
-        if is_reset:
-            day_kline_max_the_date = None
-        else:
-            day_kline_max_the_date = self.dbService.get_day_kline_max_the_date(security_code, exchange_code)
+        day_kline_max_the_date = self.dbService.get_day_kline_max_the_date(security_code, exchange_code)
+        self.logger.base_log([self.get_classs_name(), self.get_method_name(), security_code, exchange_code, 'day_kline_max_the_date', day_kline_max_the_date])
         result = self.dbService.get_stock_day_kline(security_code, exchange_code, day_kline_max_the_date)
         len_result = len(result)
         # print('result', result)
@@ -504,15 +420,6 @@ class StockOneStepBusinessService(Service):
         progress_log_list.append(progress)
         self.logger.base_log(progress_log_list)
 
-        end_log_list = Utils.deepcopy_list(self.log_list)
-        end_log_list.append(self.get_method_name())
-        end_log_list.append('security_code')
-        end_log_list.append(security_code)
-        end_log_list.append('exchange_code')
-        end_log_list.append(exchange_code)
-        end_log_list.append('【end】')
-        self.logger.base_log(end_log_list)
-
 
     def analysis_day_kline_change_percent(self, temp_kline_tuple, price_avg_pre):
         """
@@ -581,7 +488,7 @@ class StockOneStepBusinessService(Service):
             self.logger.base_log(error_log_list, logging.ERROR)
             return None
 
-    def processing_average_line(self, ma, security_code, exchange_code, is_reset=False):
+    def processing_average_line(self, ma, security_code, exchange_code):
         """
         股票均线数据处理方法
         :param ma: 
@@ -589,23 +496,9 @@ class StockOneStepBusinessService(Service):
         :param exchange_code: 交易所代码
         :return: 
         """
-        start_log_list = Utils.deepcopy_list(self.log_list)
-        start_log_list.append(self.get_method_name())
-        start_log_list.append(ma)
-        start_log_list.append('ma')
-        start_log_list.append('security_code')
-        start_log_list.append(security_code)
-        start_log_list.append('exchange_code')
-        start_log_list.append(exchange_code)
-        start_log_list.append('【start】...')
-        self.logger.base_log(start_log_list)
-
-        average_line_max_the_date = None
-        if is_reset:
-            decline_ma_the_date = None
-        else:
-            average_line_max_the_date = self.dbService.get_average_line_max_the_date(ma, security_code, exchange_code)
-            decline_ma_the_date = self.dbService.get_average_line_decline_max_the_date(ma, average_line_max_the_date)
+        average_line_max_the_date = self.dbService.get_average_line_max_the_date(ma, security_code, exchange_code)
+        decline_ma_the_date = self.dbService.get_average_line_decline_max_the_date(ma, average_line_max_the_date)
+        self.logger.base_log([self.get_classs_name(), self.get_method_name(), 'ma', ma, security_code, exchange_code, 'average_line_max_the_date', average_line_max_the_date, 'decline_ma_the_date', decline_ma_the_date])
         # print('decline_ma_the_date', decline_ma_the_date, 'average_line_max_the_date', average_line_max_the_date)
         result = self.dbService.get_stock_day_kline(security_code, exchange_code, decline_ma_the_date)
         len_result = len(result)
@@ -774,17 +667,6 @@ class StockOneStepBusinessService(Service):
             error_log_list.append(exc_traceback)
             self.logger.base_log(error_log_list, logging.ERROR)
 
-        end_log_list = Utils.deepcopy_list(self.log_list)
-        end_log_list.append(self.get_method_name())
-        end_log_list.append('ma')
-        end_log_list.append(ma)
-        end_log_list.append('security_code')
-        end_log_list.append(security_code)
-        end_log_list.append('exchange_code')
-        end_log_list.append(exchange_code)
-        end_log_list.append('【end】')
-        self.logger.base_log(end_log_list)
-
     def analysis_average_line(self, ma, temp_line_tuple, security_code, exchange_code, previous_data):
         """
         股票均线数据计算方法
@@ -888,7 +770,7 @@ class StockOneStepBusinessService(Service):
                 price_avg, price_pre_avg, price_avg_chg,
                 amount_flow_chg, vol_flow_chg, close_ma_price_avg_chg]
 
-    def processing_average_line_avg(self, ma, security_code, exchange_code, is_reset=False):
+    def processing_average_line_avg(self, ma, security_code, exchange_code):
         """
         股票均线数据涨跌幅平均数据处理方法
         :param ma: 均线类型
@@ -896,22 +778,9 @@ class StockOneStepBusinessService(Service):
         :param exchange_code: 交易所代码
         :return: 
         """
-        start_log_list = Utils.deepcopy_list(self.log_list)
-        start_log_list.append(self.get_method_name())
-        start_log_list.append('ma')
-        start_log_list.append(ma)
-        start_log_list.append('security_code')
-        start_log_list.append(security_code)
-        start_log_list.append('exchange_code')
-        start_log_list.append(exchange_code)
-        start_log_list.append('【start】...')
-        self.logger.base_log(start_log_list)
-
-        if is_reset:
-            decline_ma_the_date = None
-        else:
-            average_line_avg_max_the_date = self.dbService.get_average_line_avg_max_the_date(ma, security_code, exchange_code)
-            decline_ma_the_date = self.dbService.get_average_line_avg_decline_max_the_date(ma, average_line_avg_max_the_date)
+        average_line_avg_max_the_date = self.dbService.get_average_line_avg_max_the_date(ma, security_code, exchange_code)
+        decline_ma_the_date = self.dbService.get_average_line_avg_decline_max_the_date(ma, average_line_avg_max_the_date)
+        self.logger.base_log([self.get_classs_name(), self.get_method_name(), 'ma', ma, security_code, exchange_code, 'average_line_avg_max_the_date', average_line_avg_max_the_date, 'decline_ma_the_date', decline_ma_the_date])
         result = self.dbService.get_average_line(ma, security_code, exchange_code, decline_ma_the_date)
         len_result = len(result)
         if len_result < ma:
@@ -1024,17 +893,6 @@ class StockOneStepBusinessService(Service):
             error_log_list.append(exc_traceback)
             self.logger.base_log(error_log_list, logging.ERROR)
 
-        end_log_list = Utils.deepcopy_list(self.log_list)
-        end_log_list.append(self.get_method_name())
-        end_log_list.append('ma')
-        end_log_list.append(ma)
-        end_log_list.append('security_code')
-        end_log_list.append(security_code)
-        end_log_list.append('exchange_code')
-        end_log_list.append(exchange_code)
-        end_log_list.append('【end】')
-        self.logger.base_log(end_log_list)
-
     def analysis_average_line_avg(self, ma, temp_line_tuple, security_code, exchange_code):
         """
         均线数据涨跌幅平均计算方法
@@ -1080,153 +938,28 @@ class StockOneStepBusinessService(Service):
                 close_avg_chg_avg, amount_avg_chg_avg, vol_avg_chg_avg,
                 price_avg_chg_avg, amount_flow_chg_avg, vol_flow_chg_avg]
 
-    def processing_start_real_time_thread(self, security_code, exchange_code, is_reset):
-        """
-        启动一个实时行情计算线程，单只股票
-        :param security_code: 股票代码
-        :param exchange_code: 交易所代码
-        :return: 
-        """
-        start_log_list = Utils.deepcopy_list(self.log_list)
-        start_log_list.append(self.get_method_name())
-        start_log_list.append('security_code')
-        start_log_list.append(security_code)
-        start_log_list.append('exchange_code')
-        start_log_list.append(exchange_code)
-        start_log_list.append('【start】...')
-        self.logger.base_log(start_log_list)
-
-        today = datetime.date.today()
-        max_the_date = self.dbService.get_day_kline_exist_max_the_date(security_code, exchange_code)
-        # print('today', today, 'max_the_date', max_the_date)
-        if max_the_date is not None:
-            # 如果max_the_date < today，则说明今天的日K数据还没有入库，需要进行实时行情查询处理
-            if max_the_date <= today:
-                thread = threading.Thread(target=self.processing_real_time_kline,
-                                          args=(security_code, exchange_code, is_reset
-                                                )
-                                          )
-                thread.start()
-            else:
-                warn_log_list = Utils.deepcopy_list(self.log_list)
-                warn_log_list.append(self.get_method_name())
-                warn_log_list.append('security_code')
-                warn_log_list.append(security_code)
-                warn_log_list.append('exchange_code')
-                warn_log_list.append(exchange_code)
-                warn_log_list.append('max_the_date')
-                warn_log_list.append(max_the_date)
-                warn_log_list.append('>=')
-                warn_log_list.append('today')
-                warn_log_list.append(today)
-                warn_log_list.append('do not start thread')
-                self.logger.base_log(warn_log_list, logging.WARNING)
-        else:
-            thread = threading.Thread(target=self.processing_real_time_kline,
-                                      args=(security_code, exchange_code
-                                            )
-                                      )
-            thread.start()
-
-        end_log_list = Utils.deepcopy_list(self.log_list)
-        end_log_list.append(self.get_method_name())
-        end_log_list.append('security_code')
-        end_log_list.append(security_code)
-        end_log_list.append('exchange_code')
-        end_log_list.append(exchange_code)
-        end_log_list.append('【end】')
-        self.logger.base_log(end_log_list)
-
-    def processing_real_time_kline(self, security_code, exchange_code, is_reset):
+    def processing_real_time_kline(self, security_code, exchange_code):
         """
         处理单只股票的实时行情
         :param security_code: 
         :param exchange_code: 
         :return: 
         """
-        start_log_list = Utils.deepcopy_list(self.log_list)
-        start_log_list.append(self.get_method_name())
-        start_log_list.append('security_code')
-        start_log_list.append(security_code)
-        start_log_list.append('exchange_code')
-        start_log_list.append(exchange_code)
-        start_log_list.append('【start】...')
-        self.logger.base_log(start_log_list)
+        current_date = datetime.datetime.now()
+        start_date = datetime.datetime.now()
+        end_date = datetime.datetime.now()
+        start_date = end_date.replace(hour=9, minute=30, second=0, microsecond=0)
+        end_date = end_date.replace(hour=15, minute=0, second=0, microsecond=0)
+        self.logger.base_log([self.get_classs_name(), self.get_method_name(), security_code, exchange_code, 'start_date', start_date, 'current_date', current_date, 'end_date', end_date])
 
-        while True:
-            curent_date = datetime.datetime.now()
-            start_while_log_list = Utils.deepcopy_list(self.log_list)
-            start_while_log_list.append(self.get_method_name())
-            start_while_log_list.append('security_code')
-            start_while_log_list.append(security_code)
-            start_while_log_list.append('exchange_code')
-            start_while_log_list.append(exchange_code)
-            start_while_log_list.append('curent_date')
-            start_while_log_list.append(curent_date)
-            start_while_log_list.append('start...')
-            self.logger.base_log(start_while_log_list)
-
-            start_date = datetime.datetime.now()
-            end_date = datetime.datetime.now()
-            start_date = end_date.replace(hour=9, minute=30, second=0, microsecond=0)
-            end_date = end_date.replace(hour=15, minute=0, second=0, microsecond=0)
-            sleep_seconds = 180
-            # if curent_date > end_date or curent_date < start_date:
-            if False:
-                sleep_log_list = Utils.deepcopy_list(self.log_list)
-                sleep_log_list.append(self.get_method_name())
-                sleep_log_list.append('security_code')
-                sleep_log_list.append(security_code)
-                sleep_log_list.append('exchange_code')
-                sleep_log_list.append(exchange_code)
-                sleep_log_list.append('curent_date')
-                sleep_log_list.append(curent_date)
-                sleep_log_list.append('start_date')
-                sleep_log_list.append(start_date)
-                sleep_log_list.append('end_date')
-                sleep_log_list.append(end_date)
-                sleep_log_list.append('【sleep】 seconds')
-                sleep_log_list.append(sleep_seconds)
-                self.logger.base_log(sleep_log_list)
-                time.sleep(sleep_seconds)
-            else:
-                # 5分钟K的实时行情
-                day_kline = tt.get_stock_bar(security_code, 1)
-                # print('day_kline', day_kline)
-                # 处理单只股票的实时行情，并入库
-                self.analysis_real_time_kline(security_code, exchange_code, day_kline, start_date)
-                # 股票日K涨跌幅处理方法
-                self.procesing_day_kline_after(security_code, exchange_code, is_reset)
-                # 往队列发送消息通知有新数据了，可以往页面推送了
-
-                sleep_log_list = Utils.deepcopy_list(self.log_list)
-                sleep_log_list.append(self.get_method_name())
-                sleep_log_list.append('security_code')
-                sleep_log_list.append(security_code)
-                sleep_log_list.append('exchange_code')
-                sleep_log_list.append(exchange_code)
-                sleep_log_list.append('curent_date')
-                sleep_log_list.append(curent_date)
-                sleep_log_list.append('start_date')
-                sleep_log_list.append(start_date)
-                sleep_log_list.append('end_date')
-                sleep_log_list.append(end_date)
-                sleep_log_list.append('【processing done】')
-                sleep_log_list.append('【sleep】 seconds')
-                sleep_log_list.append(sleep_seconds)
-                self.logger.base_log(sleep_log_list)
-                time.sleep(sleep_seconds)
-
-            end_while_log_list = Utils.deepcopy_list(self.log_list)
-            end_while_log_list.append(self.get_method_name())
-            end_while_log_list.append('security_code')
-            end_while_log_list.append(security_code)
-            end_while_log_list.append('exchange_code')
-            end_while_log_list.append(exchange_code)
-            end_while_log_list.append('curent_date')
-            end_while_log_list.append(curent_date)
-            end_while_log_list.append('end')
-            self.logger.base_log(end_while_log_list)
+        if current_date <= end_date and current_date >= start_date:
+            # 5分钟K的实时行情
+            day_kline = tt.get_stock_bar(security_code, 1)
+            # print('day_kline', day_kline)
+            # 处理单只股票的实时行情，并入库
+            self.analysis_real_time_kline(security_code, exchange_code, day_kline, start_date)
+            # 股票日K涨跌幅处理方法
+            self.procesing_day_kline_after(security_code, exchange_code)
 
     def analysis_real_time_kline(self, security_code, exchange_code, day_kline, start_date):
         """

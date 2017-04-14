@@ -345,3 +345,7 @@ class DbService(object):
             recentdays += 1
         print('recentdays', recentdays)
         return recentdays
+
+    def get_worth_buying_stock(self):
+        sql = "select security_code, exchange_code from tquant_security_info where worth_buying = 1"
+        return self.query(sql)
