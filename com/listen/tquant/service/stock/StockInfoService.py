@@ -20,7 +20,6 @@ class StockInfoService(BaseService):
         self.dbService = dbService
         self.sleep_seconds = sleep_seconds
         self.one_time = one_time
-        self.security_type = 'STOCK'
         self.log_list = [self.get_classs_name()]
 
         init_log_list = self.deepcopy_list(self.log_list)
@@ -32,10 +31,10 @@ class StockInfoService(BaseService):
         self.logger.info(init_log_list)
 
         self.upsert_stock_info_sql = "insert into tquant_security_info (security_code, security_name, " \
-                                    "security_type, exchange_code) " \
-                                    "values ({security_code}, {security_name}, {security_type}, {exchange_code}) " \
+                                    "exchange_code) " \
+                                    "values ({security_code}, {security_name}, {exchange_code}) " \
                                     "on duplicate key update " \
-                                    "security_name=values(security_name) "
+                                    "security_name=values(security_name), exchange_code=values(exchange_code) "
 
     def loop(self):
         loop_log_list = self.deepcopy_list(self.log_list)
@@ -87,8 +86,7 @@ class StockInfoService(BaseService):
                         upsert_sql = self.upsert_stock_info_sql.format(
                             exchange_code=self.quotes_surround(exchange_code),
                             security_code=self.quotes_surround(security_code),
-                            security_name=self.quotes_surround(security_name),
-                            security_type=self.quotes_surround(self.security_type)
+                            security_name=self.quotes_surround(security_name)
                         )
                         if len(upsert_sql_list) == 100:
                             self.dbService.insert_many(upsert_sql_list)

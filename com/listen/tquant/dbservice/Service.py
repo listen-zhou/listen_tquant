@@ -81,9 +81,8 @@ class DbService(object):
             return None
 
     def query_all_security_codes(self):
-        sql = "select security_code, exchange_code " \
-              "from tquant_security_info " \
-              "where security_type = 'STOCK'"
+        sql = "select security_code " \
+              "from tquant_security_info "
         return self.query(sql)
 
     def get_calendar_max_the_date(self):
@@ -124,85 +123,81 @@ class DbService(object):
         return None
 
     def get_batch_list_except_security_codes(self):
-        sql = "select c.security_code, c.exchange_code " \
+        sql = "select c.security_code, " \
               "from " \
               "( " \
-              "select a.security_code, a.exchange_code, a.k_count, b.avg_count ," \
+              "select a.security_code, a.k_count, b.avg_count ," \
               "b.ma, (a.k_count-b.avg_count + 1) diff " \
               "from " \
               "( " \
-              "select security_code, exchange_code, count(*) k_count " \
+              "select security_code, count(*) k_count " \
               "from tquant_stock_day_kline " \
-              "group by security_code, exchange_code" \
+              "group by security_code" \
               ") a " \
               "left join " \
               "( " \
-              "select security_code, exchange_code, ma, count(*) avg_count " \
+              "select security_code, ma, count(*) avg_count " \
               "from tquant_stock_average_line " \
-              "group by security_code, exchange_code, ma" \
+              "group by security_code, ma" \
               ") b " \
-              "on a.security_code = b.security_code and b.exchange_code = a.exchange_code " \
+              "on a.security_code = b.security_code " \
               "having (a.k_count-b.avg_count + 1) != b.ma ) c " \
-              "group by c.security_code, c.exchange_code "
+              "group by c.security_code "
         tuple_security_codes = self.query(sql)
         if tuple_security_codes is not None and len(tuple_security_codes) > 0:
             return tuple_security_codes
         return None
 
     def get_day_kline_except_security_codes(self):
-        sql = "select security_code, exchange_code " \
+        sql = "select security_code " \
               "from " \
               "( " \
-              "select security_code, exchange_code " \
+              "select security_code " \
               "from tquant_stock_day_kline " \
               "where close is null or close <= 0 " \
               "or open is null or open <= 0 " \
               "or high <= 0 or high is null " \
               "or low <= 0 or low is null " \
-              "group by security_code, exchange_code " \
+              "group by security_code " \
               ") a"
         tuple_security_codes = self.query(sql)
         if tuple_security_codes is not None and len(tuple_security_codes) > 0:
             return tuple_security_codes
         return None
 
-    def get_stock_day_kline(self, security_code, exchange_code, decline_ma_the_date):
+    def get_stock_day_kline(self, security_code, decline_ma_the_date):
         sql = "select the_date, close, amount, vol, price_avg " \
               "from tquant_stock_day_kline " \
-              "where security_code = {security_code} " \
-              "and exchange_code = {exchange_code} "
+              "where security_code = {security_code} "
         max_the_date = None
         if decline_ma_the_date is not None:
             sql += "and the_date >= {max_the_date} "
             max_the_date = decline_ma_the_date.strftime('%Y-%m-%d')
         sql += "order by the_date asc "
         sql = sql.format(security_code=Utils.quotes_surround(security_code),
-                         exchange_code=Utils.quotes_surround(exchange_code),
                          max_the_date=Utils.quotes_surround(max_the_date)
                          )
         result = self.query(sql)
         return result
 
-    def get_previous_average_line(self, ma, security_code, exchange_code, the_date):
+    def get_previous_average_line(self, ma, security_code, the_date):
         sql = "select close_avg, amount_avg, vol_avg, price_avg, the_date " \
               "from tquant_stock_average_line " \
               "where security_code = {security_code} " \
-              "and exchange_code = {exchange_code} and ma = {ma} and the_date < {the_date} " \
+              "and ma = {ma} and the_date < {the_date} " \
               "order by the_date desc limit 1".format(security_code=Utils.quotes_surround(security_code),
-                                                      exchange_code=Utils.quotes_surround(exchange_code),
                                                       ma=ma,
                                                       the_date=Utils.quotes_surround(the_date.strftime('%Y-%m-%d')))
         # print('get_previous_average_line', sql)
         previous_data = self.query(sql)
         return previous_data
 
-    def get_average_line(self, ma, security_code, exchange_code, decline_ma_the_date):
+    def get_average_line(self, ma, security_code, decline_ma_the_date):
         sql = "select the_date, " \
               "close_avg_chg, amount_avg_chg, vol_avg_chg, " \
               "price_avg_chg, amount_flow_chg, vol_flow_chg " \
               "from tquant_stock_average_line " \
               "where security_code = {security_code} " \
-              "and exchange_code = {exchange_code} " \
               "and ma = {ma} " \
               "and close_avg_chg is not null " \
               "and amount_avg_chg is not null " \
@@ -216,21 +211,18 @@ class DbService(object):
             max_the_date = decline_ma_the_date.strftime('%Y-%m-%d')
         sql += "order by the_date asc "
         sql = sql.format(security_code=Utils.quotes_surround(security_code),
-                         exchange_code=Utils.quotes_surround(exchange_code),
                          max_the_date=Utils.quotes_surround(max_the_date),
                          ma=ma
                          )
         result = self.query(sql)
         return result
 
-    def get_day_kline_max_the_date(self, security_code, exchange_code):
+    def get_day_kline_max_the_date(self, security_code):
         sql = "select the_date max_the_date from tquant_stock_day_kline " \
               "where security_code = {security_code} " \
-              "and exchange_code = {exchange_code} " \
               "and close_pre is not null and close_chg is not null " \
               "order by the_date desc limit 2"
-        the_date = self.query(sql.format(security_code=Utils.quotes_surround(security_code),
-                                         exchange_code=Utils.quotes_surround(exchange_code)
+        the_date = self.query(sql.format(security_code=Utils.quotes_surround(security_code)
                                         )
                               )
         if the_date is not None and len(the_date) > 0:
@@ -241,14 +233,12 @@ class DbService(object):
         else:
             return None
 
-    def get_average_line_max_the_date(self, ma, security_code, exchange_code):
+    def get_average_line_max_the_date(self, ma, security_code):
         sql = "select the_date max_the_date from tquant_stock_average_line " \
               "where security_code = {security_code} " \
-              "and exchange_code = {exchange_code} " \
               "and ma = {ma} " \
               "order by the_date desc limit 1"
         the_date = self.query(sql.format(security_code=Utils.quotes_surround(security_code),
-                                         exchange_code=Utils.quotes_surround(exchange_code),
                                          ma=ma
                                          )
                               )
@@ -276,10 +266,9 @@ class DbService(object):
         else:
             return None
 
-    def get_average_line_avg_max_the_date(self, ma, security_code, exchange_code):
+    def get_average_line_avg_max_the_date(self, ma, security_code):
         sql = "select the_date max_the_date from tquant_stock_average_line " \
               "where security_code = {security_code} " \
-              "and exchange_code = {exchange_code} " \
               "and ma = {ma} " \
               "and close_avg_chg is not null " \
               "and amount_avg_chg is not null " \
@@ -295,7 +284,6 @@ class DbService(object):
               "and vol_flow_chg_avg is not null " \
               "order by the_date desc limit 1"
         the_date = self.query(sql.format(security_code=Utils.quotes_surround(security_code),
-                                                   exchange_code=Utils.quotes_surround(exchange_code),
                                                    ma=ma
                                          )
                               )
@@ -321,11 +309,10 @@ class DbService(object):
         else:
             return None
 
-    def get_day_kline_exist_max_the_date(self, security_code, exchange_code):
+    def get_day_kline_exist_max_the_date(self, security_code):
         sql = "select max(the_date) from tquant_stock_day_kline " \
-              "where security_code = {security_code} and exchange_code = {exchange_code} "
-        sql = sql.format(security_code=Utils.quotes_surround(security_code),
-                         exchange_code=Utils.quotes_surround(exchange_code))
+              "where security_code = {security_code} "
+        sql = sql.format(security_code=Utils.quotes_surround(security_code))
         the_date = self.query(sql)
         # print(sql)
         if the_date is not None and len(the_date) > 0:
@@ -333,19 +320,18 @@ class DbService(object):
         else:
             return None
 
-    def get_day_kline_recentdays(self, security_code, exchange_code):
-        max_the_date = self.get_day_kline_exist_max_the_date(security_code, exchange_code)
+    def get_day_kline_recentdays(self, security_code):
+        max_the_date = self.get_day_kline_exist_max_the_date(security_code)
         print('max_the_date', max_the_date)
         recentdays = None
         if max_the_date is not None :
             today = datetime.datetime.now()
             max_the_date = datetime.datetime.now().replace(max_the_date.year, max_the_date.month, max_the_date.day)
             recentdays = (today - max_the_date).days
-        if recentdays is not None:
-            recentdays += 1
-        print('recentdays', recentdays)
+        print('security_code', security_code, 'max_the_date', max_the_date, 'recentdays', recentdays)
         return recentdays
 
     def get_worth_buying_stock(self):
-        sql = "select security_code, exchange_code from tquant_security_info where worth_buying = 1"
+        sql = "select security_code, exchange_code, security_name, worth_buying " \
+              "from tquant_security_info where worth_buying > 0 "
         return self.query(sql)

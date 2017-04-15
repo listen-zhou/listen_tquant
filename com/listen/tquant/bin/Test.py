@@ -1,15 +1,24 @@
 # coding: utf-8
 import inspect
 import tquant as tt
-
+import multiprocessing
 class Test:
-    @staticmethod
-    def get_alive(security_code):
-        data = tt.get_stock_bar(security_code, 1)
-        return data
+    def __init__(self, msg):
+        self.msg = msg
 
-    @staticmethod
-    def get_last_tick(security_codes):
-        data = tt.get_(security_codes)
+    def test(self):
+        i = 0
+        while i <= 1000000:
+            print(self.msg, '-', str(i))
+            i += 1
 
-print(Test.get_last_tick(['002466']))
+
+if __name__ == "__main__":
+    cpu_count = multiprocessing.cpu_count()
+    pool = multiprocessing.Pool(processes=cpu_count)
+    for i in range(100):
+        test = Test('msg' + str(i))
+        pool.apply_async(test.test)
+    pool.close()
+    pool.join()
+    print('done')

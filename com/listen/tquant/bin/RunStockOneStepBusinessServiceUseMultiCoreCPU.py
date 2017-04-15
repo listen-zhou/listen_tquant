@@ -52,6 +52,9 @@ if __name__ == "__main__":
         list_tuple = []
         worth_buying_codes = dbService.get_worth_buying_stock()
         size = len(worth_buying_codes)
+        if size == 0:
+            print('ERROR: dbService.get_worth_buying_stock() result len == 0')
+            break
         if size > cpu_count:
             batch_size = size // cpu_count
             process_size = cpu_count
