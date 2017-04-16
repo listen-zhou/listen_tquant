@@ -1,29 +1,48 @@
 # coding: utf-8
-import threading
 
-import logging
+from multiprocessing import Pool
+import os
+import time
+import random
 
-from com.listen.tquant.service.stock.CalendarService import CalendarService
+class MyThread():
+    def __init__(self):
+        # self.func = func
+        print('MyThread init...')
 
+    def long_time_task(self, i):
+        print('Run task %s (%s)...' % (i, os.getpid()))
+        time.sleep(random.random() * 3)
+        print(i)
+        # return (i, os.getpid())
 
-from com.listen.tquant.dbservice.Service import DbService
-from com.listen.tquant.log.Logger import Logger
-threads = []
+    # def parse_thread(self):
+    #     print ('Parent process %s.' % os.getpid())
+    #     p = Pool()
+    #     # results = []
+    #     for i in range(10):
+    #         p.apply_async(long_time_task_wrapper, args=(self, i,))
+    #     p.close()
+    #     p.join()
+        # Now can get the result
+        # for res in results:
+        #     print(res.get())
+        #     print('Waiting for all subprocesses done...')
+        #     p.close()
+        #     p.join()
+        #     print('All subprocesses done.')
 
-log_path = 'd:\\python_log\\calendar'
-log_name = '\\list_tquant_calendar.log'
-when = 'H'
-interval = 1
-backupCount = 10
-level = logging.INFO
+def long_time_task_wrapper(cls_instance, i):
+        cls_instance.long_time_task(i)
 
-logger = Logger(level, log_path, log_name, when, interval, backupCount)
-sleep_seconds = 120
-one_time = True
-
-# 处理证券交易日信息线程
-dbService3 = DbService()
-i = 0
-while i < 1000:
-    i += 1
-    dbService3.query('delete from tquant_stock_average_line limit ' + str(i * 1000))
+def main():
+    print("start")
+    p = Pool(processes=4)
+    tt=MyThread()
+    # tt.parse_thread()
+    for i in range(10):
+        p.apply_async(long_time_task_wrapper, args=(tt, i,))
+    p.close()
+    p.join()
+if __name__=="__main__":
+    main()

@@ -1,5 +1,9 @@
 # coding: utf-8
+import configparser
+import os
 import sys
+
+import redis
 
 from com.listen.tquant.service.stock.StockOneStopProcessor import StockOneStopProcessor
 from com.listen.tquant.dbservice.Service import DbService
@@ -21,7 +25,7 @@ import multiprocessing
 import time
 
 log_path = 'd:\\python_log\\one_step'
-log_name = '\\list_tquant_stock_one_step_business_{batch_num}.log'
+log_name = '\\list_tquant_stock_one_step_business_all.log'
 when = 'M'
 interval = 1
 backupCount = 10
@@ -33,13 +37,29 @@ def test(msg):
         print(msg, '-', str(i))
         i += 1
 
-def init(service):
-    service.processing_single_security_code()
+def init(security_code, r, queue):
+    StockOneStopProcessor.processing_single_security_code(security_code, r, queue)
 
 if __name__ == "__main__":
+
+    config = configparser.ConfigParser()
+    os.chdir('../config')
+    config.read('redis.cfg')
+    redis_section = config['redis']
+    if redis_section:
+        host = redis_section['redis.host']
+        port = int(redis_section['redis.port'])
+        db = redis_section['redis.db']
+        queue = redis_section['redis.block.average.queue']
+        pool = redis.ConnectionPool(host=host, port=port, db=db)
+        r = redis.Redis(connection_pool=pool)
+    else:
+        raise FileNotFoundError('redis.cfg redis section not found!!!')
+
     cpu_count = multiprocessing.cpu_count()
     loop_size = 1
     dbService = DbService()
+    logger = Logger(level, log_path, log_name, when, interval, backupCount)
     while True:
         worth_buying_codes = dbService.get_worth_buying_stock()
         size = len(worth_buying_codes)
@@ -48,11 +68,9 @@ if __name__ == "__main__":
         security_codes = [worth_buying_codes[i][0] for  i in range(len(worth_buying_codes))]
         for security_code in security_codes:
             try:
-                result = pool.apply_async(StockOneStopProcessor.processing_single_security_code, args=(security_code, ))
+                result = pool.apply_async(init, args=(security_code, r, queue))
             except Exception:
-                print(sys.exc_info())
-        # for i in range(100):
-        #     pool.apply_async(test, args=('msg-' + str(i), ))
+                sys.exc_traceback()
         pool.close()
         pool.join()
         print('loop_size', loop_size)

@@ -13,7 +13,7 @@ from com.listen.tquant.service.Service import Service
 import time
 from com.listen.tquant.log.Logger import Logger
 import inspect
-
+from com.listen.tquant.redis.RedisService import RedisService
 
 class StockOneStopProcessor(Service):
     """
@@ -61,40 +61,54 @@ class StockOneStopProcessor(Service):
                   'amount_flow_chg_avg=values(amount_flow_chg_avg), vol_flow_chg_avg=values(vol_flow_chg_avg) '
     
     dbService = DbService()
-    mas = [3, 5, 10]
+    redisService = RedisService()
 
-    @staticmethod
-    def get_method_name():
-        return inspect.stack()[1][3]
+    def consume(self):
+        print('consume init ...')
+        self.redisService.get_log()
+    
+    def __init__(self, security_code, mas):
+        self.security_code = security_code
+        self.mas = mas
+        self.log_list = [self.get_classs_name(), self.get_method_name(), self.security_code]
+        log_list = self.deepcopy(self.log_list)
+        log_list.append('mas')
+        log_list.append(mas)
+        log_list.append('init...')
+        self.redisService.put_log(log_list)
+        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
 
-    @staticmethod
-    def processing_single_security_code(security_code, r, queue):
-        print('processing_single_security_code init ...')
+    def processing_single_security_code(self):
+        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
+        log_list = self.deepcopy(self.log_list)
+        log_list.append('init...')
+        self.redisService.put_log(log_list)
         """
         单只股票处理方法
         :return: 
         """
         # 股票日K数据处理方法
-        StockOneStopProcessor.processing_day_kline(security_code, r, queue)
+        self.processing_day_kline()
         # 股票日K数据处理后有关计算的方法
-        StockOneStopProcessor.procesing_day_kline_after(security_code, r, queue)
-        StockOneStopProcessor.processing_real_time_kline(security_code, r, queue)
+        self.procesing_day_kline_after()
+        self.processing_real_time_kline()
 
-    @staticmethod
-    def processing_day_kline(security_code, r, queue):
+    def processing_day_kline(self):
+        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
         """
         股票日K数据处理，分全量还是增量
         :return: 
         """
         try:
-            recent_few_days = StockOneStopProcessor.dbService.get_day_kline_recentdays(security_code)
-            r.lpush(queue, ['StockOneStopProcessor', StockOneStopProcessor.get_method_name(), security_code, 'recent_few_days', recent_few_days])
+            recent_few_days = self.dbService.get_day_kline_recentdays(self.security_code)
+            log_list = self.deepcopy(self.log_list)
+            log_list.append('recent_few_days')
+            log_list.append(recent_few_days)
+            self.redisService.put_log(log_list)
             if recent_few_days is not None and recent_few_days > 0:
-                result = tt.get_last_n_daybar(security_code, recent_few_days, 'qfq')
+                result = tt.get_last_n_daybar(self.security_code, recent_few_days, 'qfq')
             else:
-                result = tt.get_all_daybar(security_code, 'qfq')
-
-            # r.lpush(queue, ['result', result])
+                result = tt.get_all_daybar(self.security_code, 'qfq')
 
             if result.empty == False:
                 # 索引值为日期
@@ -112,10 +126,10 @@ class StockOneStopProcessor(Service):
                         add_up += 1
                         # 解析股票日K数据（每行）
                         # 解析每行的返回值格式为list [the_date, amount, vol, open, high, low, close]
-                        list_data = StockOneStopProcessor.analysis_columns_day_kline(result, idx)
+                        list_data = self.analysis_columns_day_kline(result, idx)
                         if list_data is not None:
-                            upsert_sql = StockOneStopProcessor.upsert_day_kline.format(
-                                security_code=Utils.quotes_surround(security_code),
+                            upsert_sql = self.upsert_day_kline.format(
+                                security_code=Utils.quotes_surround(self.security_code),
                                 the_date=Utils.quotes_surround(list_data[0]),
                                 amount=list_data[1],
                                 vol=list_data[2],
@@ -128,88 +142,74 @@ class StockOneStopProcessor(Service):
                             continue
                         # 批量(100)提交数据更新
                         if len(upsert_sql_list) == 3000:
-                            StockOneStopProcessor.dbService.insert_many(upsert_sql_list)
+                            self.dbService.insert_many(upsert_sql_list)
                             process_line += '='
                             upsert_sql_list = []
                             if upsert_sql is not None:
                                 upsert_sql_list.append(upsert_sql)
                             progress = Utils.base_round(Utils.division_zero(add_up, len_indexes) * 100, 2)
 
-                            progress_log_list = ['StockOneStopProcessor']
-                            progress_log_list.append(StockOneStopProcessor.get_method_name())
-                            progress_log_list.append('security_code')
-                            progress_log_list.append(security_code)
-                            progress_log_list.append('progress')
-                            progress_log_list.append(add_up)
-                            progress_log_list.append(len_indexes)
-                            progress_log_list.append(process_line)
-                            progress_log_list.append(str(progress) + '%')
-                            r.lpush(queue, progress_log_list)
+                            log_list = self.deepcopy(self.log_list)
+                            log_list.append('progress')
+                            log_list.append(add_up)
+                            log_list.append(len_indexes)
+                            log_list.append(process_line)
+                            log_list.append(str(progress) + '%')
+                            self.redisService.put_log(log_list)
                         else:
                             upsert_sql_list.append(upsert_sql)
                     # 处理最后一批security_code的更新语句
                     if len(upsert_sql_list) > 0:
-                        StockOneStopProcessor.dbService.insert_many(upsert_sql_list)
+                        self.dbService.insert_many(upsert_sql_list)
                         process_line += '='
                     progress = Utils.base_round(Utils.division_zero(add_up, len(indexes_values)) * 100, 2)
 
-                    progress_log_list = ['StockOneStopProcessor']
-                    progress_log_list.append(StockOneStopProcessor.get_method_name())
-                    progress_log_list.append('security_code')
-                    progress_log_list.append(security_code)
-                    progress_log_list.append('progress')
-                    progress_log_list.append(add_up)
-                    progress_log_list.append(len_indexes)
-                    progress_log_list.append(process_line)
-                    progress_log_list.append(progress)
-                    r.lpush(queue, progress_log_list)
+                    log_list = self.deepcopy(self.log_list)
+                    log_list.append('progress')
+                    log_list.append(add_up)
+                    log_list.append(len_indexes)
+                    log_list.append(process_line)
+                    log_list.append(progress)
+                    self.redisService.put_log(log_list)
                 else:
-                    warn_log_list = ['StockOneStopProcessor']
-                    warn_log_list.append(StockOneStopProcessor.get_method_name())
-                    warn_log_list.append('security_code')
-                    warn_log_list.append(security_code)
-                    warn_log_list.append('result`s indexes_values is None')
-                    r.lpush(queue, warn_log_list, logging.WARNING)
+                    log_list = self.deepcopy(self.log_list)
+                    log_list.append('result`s indexes_values is None')
+                    self.redisService.put_log(log_list, logging.WARNING)
             else:
-                warn_log_list = ['StockOneStopProcessor']
-                warn_log_list.append(StockOneStopProcessor.get_method_name())
-                warn_log_list.append('security_code')
-                warn_log_list.append(security_code)
-                warn_log_list.append('tt.get_all_daybar or tt.get_last_n_daybar result is None')
-                r.lpush(queue, warn_log_list, logging.WARNING)
-
+                log_list = self.deepcopy(self.log_list)
+                log_list.append('tt.get_all_daybar or tt.get_last_n_daybar result is None')
+                self.redisService.put_log(log_list, logging.WARNING)
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             line_no = traceback.extract_stack()[-2][1]
-            error_log_list = ['StockOneStopProcessor']
-            error_log_list.append(StockOneStopProcessor.get_method_name())
-            error_log_list.append('security_code')
-            error_log_list.append(security_code)
-            error_log_list.append('line_no')
-            error_log_list.append(line_no)
-            error_log_list.append(exc_type)
-            error_log_list.append(exc_value)
-            error_log_list.append(exc_traceback)
-            r.lpush(queue, error_log_list, logging.ERROR)
+            log_list = self.deepcopy(self.log_list)
+            log_list.append('line_no')
+            log_list.append(line_no)
+            log_list.append(exc_type)
+            log_list.append(exc_value)
+            log_list.append(exc_traceback)
+            self.redisService.put_log(log_list, logging.ERROR)
 
-    @staticmethod
-    def procesing_day_kline_after(security_code, r, queue):
+    def procesing_day_kline_after(self):
+        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
         """
         日K数据入库后计算涨跌幅，均线，均值等数据，并入库
         :return: 
         """
         # 股票日K涨跌幅处理方法
-        r.lpush(queue, ['StockOneStopProcessor', StockOneStopProcessor.get_method_name(), security_code])
-        StockOneStopProcessor.processing_day_kline_change_percent(security_code)
-        if StockOneStopProcessor.mas is not None and len(StockOneStopProcessor.mas) > 0:
-            for ma in StockOneStopProcessor.mas:
+        log_list = self.deepcopy(self.log_list)
+        log_list.append('init...')
+        self.redisService.put_log(log_list)
+        self.processing_day_kline_change_percent()
+        if self.mas is not None and len(self.mas) > 0:
+            for ma in self.mas:
                 # 股票均线数据处理方法
-                StockOneStopProcessor.processing_average_line(ma, security_code)
+                self.processing_average_line(ma)
                 # 股票均线数据平均值处理方法
-                StockOneStopProcessor.processing_average_line_avg(ma, security_code)
+                self.processing_average_line_avg(ma)
 
-    @staticmethod
-    def analysis_columns_day_kline(day_kline, idx):
+    def analysis_columns_day_kline(self, day_kline, idx):
+        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
         """
         股票日K数据处理方法
         :param day_kline: 日K的DataFrame
@@ -254,25 +254,27 @@ class StockOneStopProcessor(Service):
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             line_no = traceback.extract_stack()[-2][1]
-            error_log_list = ['StockOneStopProcessor']
-            error_log_list.append(StockOneStopProcessor.get_method_name())
-            error_log_list.append('line_no')
-            error_log_list.append(line_no)
-            error_log_list.append(exc_type)
-            error_log_list.append(exc_value)
-            error_log_list.append(exc_traceback)
-            r.lpush(queue, error_log_list, logging.ERROR)
+            log_list = self.deepcopy(self.log_list)
+            log_list.append('line_no')
+            log_list.append(line_no)
+            log_list.append(exc_type)
+            log_list.append(exc_value)
+            log_list.append(exc_traceback)
+            self.redisService.put_log(log_list, logging.ERROR)
             return None
 
-    @staticmethod
-    def processing_day_kline_change_percent(security_code, r, queue):
+    def processing_day_kline_change_percent(self):
+        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
         """
         股票日K数据涨跌幅处理方法
         :return: 
         """
-        day_kline_max_the_date = StockOneStopProcessor.dbService.get_day_kline_max_the_date(security_code)
-        r.lpush(queue, ['StockOneStopProcessor', StockOneStopProcessor.get_method_name(), security_code, 'day_kline_max_the_date', day_kline_max_the_date])
-        result = StockOneStopProcessor.dbService.get_stock_day_kline(security_code, day_kline_max_the_date)
+        day_kline_max_the_date = self.dbService.get_day_kline_max_the_date(self.security_code)
+        log_list = self.deepcopy(self.log_list)
+        log_list.append('day_kline_max_the_date')
+        log_list.append(day_kline_max_the_date)
+        self.redisService.put_log(log_list)
+        result = self.dbService.get_stock_day_kline(self.security_code, day_kline_max_the_date)
         len_result = len(result)
         # print('result', result)
         if len_result == 0:
@@ -296,7 +298,7 @@ class StockOneStopProcessor(Service):
             temp_kline_tuple = result[i:section_idx]
             # 返回值格式list [the_date, close1, close_chg, amount1, amount_chg, vol1, vol_chg, 
             # price_avg, close_price_avg_chg, price_avg_chg]
-            list_data = StockOneStopProcessor.analysis_day_kline_change_percent(temp_kline_tuple, price_avg_pre)
+            list_data = self.analysis_day_kline_change_percent(temp_kline_tuple, price_avg_pre)
             # print(temp_kline_tuple)
             # print(price_avg_pre)
             if list_data is not None:
@@ -318,7 +320,7 @@ class StockOneStopProcessor(Service):
                               'vol_pre=values(vol_pre), vol_chg=values(vol_chg), ' \
                              'price_avg=values(price_avg), close_price_avg_chg=values(close_price_avg_chg), price_avg_chg=values(price_avg_chg)'
                 upsert_sql = upsert_sql.format(
-                    security_code=Utils.quotes_surround(security_code),
+                    security_code=Utils.quotes_surround(self.security_code),
                     the_date=Utils.quotes_surround(list_data[0].strftime('%Y-%m-%d')),
                     close_pre=list_data[1],
                     close_chg=list_data[2],
@@ -335,7 +337,7 @@ class StockOneStopProcessor(Service):
                 upsert_sql = None
             # 批量(100)提交数据更新
             if len(upsert_sql_list) == 1000:
-                StockOneStopProcessor.dbService.insert_many(upsert_sql_list)
+                self.dbService.insert_many(upsert_sql_list)
                 process_line += '='
                 upsert_sql_list = []
                 if upsert_sql is not None:
@@ -343,16 +345,13 @@ class StockOneStopProcessor(Service):
                 # 这个地方为什么要add_up + 1？因为第一条数据不会被处理，所以总数会少一条，所以在计算进度的时候要+1
                 progress = Utils.base_round(Utils.division_zero((add_up + 1), len_result) * 100, 2)
 
-                progress_log_list = ['StockOneStopProcessor']
-                progress_log_list.append(StockOneStopProcessor.get_method_name())
-                progress_log_list.append('security_code')
-                progress_log_list.append(security_code)
-                progress_log_list.append('progress')
-                progress_log_list.append(add_up + 1)
-                progress_log_list.append(len_result)
-                progress_log_list.append(process_line)
-                progress_log_list.append(progress)
-                r.lpush(queue, progress_log_list)
+                log_list = self.deepcopy(self.log_list)
+                log_list.append('progress')
+                log_list.append(add_up + 1)
+                log_list.append(len_result)
+                log_list.append(process_line)
+                log_list.append(progress)
+                self.redisService.put_log(log_list)
             else:
                 if upsert_sql is not None:
                     upsert_sql_list.append(upsert_sql)
@@ -360,23 +359,20 @@ class StockOneStopProcessor(Service):
             add_up += 1
         # 处理最后一批security_code的更新语句
         if len(upsert_sql_list) > 0:
-            StockOneStopProcessor.dbService.insert_many(upsert_sql_list)
+            self.dbService.insert_many(upsert_sql_list)
             process_line += '='
         progress = Utils.base_round(Utils.division_zero((add_up + 1), len_result) * 100, 2)
 
-        progress_log_list = ['StockOneStopProcessor']
-        progress_log_list.append(StockOneStopProcessor.get_method_name())
-        progress_log_list.append('security_code')
-        progress_log_list.append(security_code)
-        progress_log_list.append('progress')
-        progress_log_list.append(add_up + 1)
-        progress_log_list.append(len_result)
-        progress_log_list.append(process_line)
-        progress_log_list.append(progress)
-        r.lpush(queue, progress_log_list)
+        log_list = self.deepcopy(self.log_list)
+        log_list.append('progress')
+        log_list.append(add_up + 1)
+        log_list.append(len_result)
+        log_list.append(process_line)
+        log_list.append(progress)
+        self.redisService.put_log(log_list)
 
-    @staticmethod
-    def analysis_day_kline_change_percent(temp_kline_tuple, price_avg_pre):
+    def analysis_day_kline_change_percent(self, temp_kline_tuple, price_avg_pre):
+        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
         """
         股票日K涨跌幅计算方法
         :param temp_kline_tuple: 相邻两个日K数据的列表
@@ -433,28 +429,34 @@ class StockOneStopProcessor(Service):
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             line_no = traceback.extract_stack()[-2][1]
-            error_log_list = ['StockOneStopProcessor']
-            error_log_list.append(StockOneStopProcessor.get_method_name())
-            error_log_list.append('line_no')
-            error_log_list.append(line_no)
-            error_log_list.append(exc_type)
-            error_log_list.append(exc_value)
-            error_log_list.append(exc_traceback)
-            r.lpush(queue, error_log_list, logging.ERROR)
+            log_list = self.deepcopy(self.log_list)
+            log_list.append('line_no')
+            log_list.append(line_no)
+            log_list.append(exc_type)
+            log_list.append(exc_value)
+            log_list.append(exc_traceback)
+            self.redisService.put_log(log_list, logging.ERROR)
             return None
 
-    @staticmethod
-    def processing_average_line(ma, security_code, r, queue):
+    def processing_average_line(self, ma):
+        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
         """
         股票均线数据处理方法
         :param ma: 
         :return: 
         """
-        average_line_max_the_date = StockOneStopProcessor.dbService.get_average_line_max_the_date(ma, security_code)
-        decline_ma_the_date = StockOneStopProcessor.dbService.get_average_line_decline_max_the_date(ma, average_line_max_the_date)
-        r.lpush(queue, ['StockOneStopProcessor', StockOneStopProcessor.get_method_name(), 'ma', ma, security_code, 'average_line_max_the_date', average_line_max_the_date, 'decline_ma_the_date', decline_ma_the_date])
+        average_line_max_the_date = self.dbService.get_average_line_max_the_date(ma, self.security_code)
+        decline_ma_the_date = self.dbService.get_average_line_decline_max_the_date(ma, average_line_max_the_date)
+        log_list = self.deepcopy(self.log_list)
+        log_list.append('ma')
+        log_list.append(ma)
+        log_list.append('average_line_max_the_date')
+        log_list.append(average_line_max_the_date)
+        log_list.append('decline_ma_the_date')
+        log_list.append(decline_ma_the_date)
+        self.redisService.put_log(log_list)
         # print('decline_ma_the_date', decline_ma_the_date, 'average_line_max_the_date', average_line_max_the_date)
-        result = StockOneStopProcessor.dbService.get_stock_day_kline(security_code, decline_ma_the_date)
+        result = self.dbService.get_stock_day_kline(self.security_code, decline_ma_the_date)
         len_result = len(result)
         # print('ma', ma, 'len_result', len_result)
         if len_result < ma:
@@ -486,7 +488,7 @@ class StockOneStopProcessor(Service):
                     if previous_data is None or len(previous_data) == 0:
                         the_date = temp_line_tuple[ma - 1][0]
                         # close_pre_avg, amount_pre_avg, vol_pre_avg, price_pre_avg
-                        previous_data = StockOneStopProcessor.dbService.get_previous_average_line(ma, security_code, the_date)
+                        previous_data = self.dbService.get_previous_average_line(ma, self.security_code, the_date)
                         # 返回值list [the_date,
                         # close, close_avg, close_pre_avg, close_avg_chg,
                         # amount, amount_avg, amount_pre_avg, amount_avg_chg,
@@ -494,7 +496,7 @@ class StockOneStopProcessor(Service):
                         # price_avg, price_pre_avg, price_avg_chg,
                         # amount_flow_chg, vol_flow_chg, close_ma_price_avg_chg]
                     # print('the_date', the_date, 'previous_data', previous_data)
-                    list_data = StockOneStopProcessor.analysis_average_line(ma, temp_line_tuple, previous_data)
+                    list_data = self.analysis_average_line(ma, temp_line_tuple, previous_data)
                     """
                     均线数据入库（3,5,10日等）
                     """
@@ -518,7 +520,7 @@ class StockOneStopProcessor(Service):
                                           'vol=values(vol), vol_avg=values(vol_avg), vol_pre_avg=values(vol_pre_avg), vol_avg_chg=values(vol_avg_chg), ' \
                                           'price_avg=values(price_avg), price_pre_avg=values(price_pre_avg), price_avg_chg=values(price_avg_chg), ' \
                                           'amount_flow_chg=values(amount_flow_chg), vol_flow_chg=values(vol_flow_chg), close_ma_price_avg_chg=values(close_ma_price_avg_chg) '
-                    upsert_sql = upsert_sql.format(security_code=Utils.quotes_surround(security_code),
+                    upsert_sql = upsert_sql.format(security_code=Utils.quotes_surround(self.security_code),
                                                                                         the_date=Utils.quotes_surround(list_data[0].strftime('%Y-%m-%d')),
                                                                                         ma=ma,
                                                                                         close=list_data[1],
@@ -551,7 +553,7 @@ class StockOneStopProcessor(Service):
 
                     # 批量(100)提交数据更新
                     if len(upsert_sql_list) == 1000:
-                        StockOneStopProcessor.dbService.insert_many(upsert_sql_list)
+                        self.dbService.insert_many(upsert_sql_list)
                         process_line += '='
                         upsert_sql_list = []
                         upsert_sql_list.append(upsert_sql)
@@ -560,18 +562,15 @@ class StockOneStopProcessor(Service):
                         else:
                             progress = Utils.base_round_zero(Utils.division_zero(add_up, (len_result - ma + 1)) * 100, 2)
 
-                        progress_log_list = ['StockOneStopProcessor']
-                        progress_log_list.append(StockOneStopProcessor.get_method_name())
-                        progress_log_list.append('ma')
-                        progress_log_list.append(ma)
-                        progress_log_list.append('security_code')
-                        progress_log_list.append(security_code)
-                        progress_log_list.append('progress')
-                        progress_log_list.append(add_up)
-                        progress_log_list.append((len_result - ma + 1))
-                        progress_log_list.append(process_line)
-                        progress_log_list.append(progress)
-                        r.lpush(queue, progress_log_list)
+                        log_list = self.deepcopy(self.log_list)
+                        log_list.append('ma')
+                        log_list.append(ma)
+                        log_list.append('progress')
+                        log_list.append(add_up)
+                        log_list.append((len_result - ma + 1))
+                        log_list.append(process_line)
+                        log_list.append(progress)
+                        self.redisService.put_log(log_list)
                     else:
                         if upsert_sql is not None:
                             upsert_sql_list.append(upsert_sql)
@@ -579,43 +578,37 @@ class StockOneStopProcessor(Service):
 
                 # 处理最后一批security_code的更新语句
                 if len(upsert_sql_list) > 0:
-                    StockOneStopProcessor.dbService.insert_many(upsert_sql_list)
+                    self.dbService.insert_many(upsert_sql_list)
                     process_line += '='
                 if len_result == ma:
                     progress = Utils.base_round_zero(1 * 100, 2)
                 else:
                     progress = Utils.base_round_zero(Utils.division_zero(add_up, (len_result - ma + 1)) * 100, 2)
 
-                progress_log_list = ['StockOneStopProcessor']
-                progress_log_list.append(StockOneStopProcessor.get_method_name())
-                progress_log_list.append('ma')
-                progress_log_list.append(ma)
-                progress_log_list.append('security_code')
-                progress_log_list.append(security_code)
-                progress_log_list.append('progress')
-                progress_log_list.append(add_up)
-                progress_log_list.append((len_result - ma + 1))
-                progress_log_list.append(process_line)
-                progress_log_list.append(progress)
-                r.lpush(queue, progress_log_list)
+                log_list = self.deepcopy(self.log_list)
+                log_list.append('ma')
+                log_list.append(ma)
+                log_list.append('progress')
+                log_list.append(add_up)
+                log_list.append((len_result - ma + 1))
+                log_list.append(process_line)
+                log_list.append(progress)
+                self.redisService.put_log(log_list)
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             line_no = traceback.extract_stack()[-2][1]
-            error_log_list = ['StockOneStopProcessor']
-            error_log_list.append(StockOneStopProcessor.get_method_name())
-            error_log_list.append('ma')
-            error_log_list.append(ma)
-            error_log_list.append('security_code')
-            error_log_list.append(security_code)
-            error_log_list.append('line_no')
-            error_log_list.append(line_no)
-            error_log_list.append(exc_type)
-            error_log_list.append(exc_value)
-            error_log_list.append(exc_traceback)
-            r.lpush(queue, error_log_list, logging.ERROR)
+            log_list = self.deepcopy(self.log_list)
+            log_list.append('ma')
+            log_list.append(ma)
+            log_list.append('line_no')
+            log_list.append(line_no)
+            log_list.append(exc_type)
+            log_list.append(exc_value)
+            log_list.append(exc_traceback)
+            self.redisService.put_log(log_list, logging.ERROR)
 
-    @staticmethod
-    def analysis_average_line(ma, temp_line_tuple, previous_data):
+    def analysis_average_line(self, ma, temp_line_tuple, previous_data):
+        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
         """
         股票均线数据计算方法
         :param ma: 均线类型
@@ -651,12 +644,12 @@ class StockOneStopProcessor(Service):
         close_avg = Utils.base_round_zero(Utils.average_zero(close_list), 2)
         # 如果收盘ma日均价为None，则为异常数据，价格不可能为0
         # if close_avg is None:
-        #     close_avg = StockOneStopProcessor.base_round_zero(Decimal(0), 2)
+        #     close_avg = self.base_round_zero(Decimal(0), 2)
         # ma日均收盘价涨跌幅=(ma日均收盘价 - 前一ma日均收盘价)/前一ma日均收盘价 * 100
         # 默认值为0
         close_avg_chg = 0
         # if close_pre_avg is not None and close_pre_avg != Decimal(0):
-        #     close_avg_chg = StockOneStopProcessor.base_round_zero(StockOneStopProcessor.division_zero((close_avg - close_pre_avg), close_pre_avg) * 100, 2)
+        #     close_avg_chg = self.base_round_zero(self.division_zero((close_avg - close_pre_avg), close_pre_avg) * 100, 2)
         close_avg_chg = Utils.base_round_zero(Utils.division_zero((close_avg - close_pre_avg), close_pre_avg) * 100, 2)
 
         # 当日成交额
@@ -670,7 +663,7 @@ class StockOneStopProcessor(Service):
         # 默认值为0
         amount_avg_chg = 0
         # if amount_pre_avg is not None and amount_pre_avg != Decimal(0):
-        #     amount_avg_chg = StockOneStopProcessor.base_round_zero(StockOneStopProcessor.division_zero((amount_avg - amount_pre_avg), amount_pre_avg) * 100, 2)
+        #     amount_avg_chg = self.base_round_zero(self.division_zero((amount_avg - amount_pre_avg), amount_pre_avg) * 100, 2)
         amount_avg_chg = Utils.base_round_zero(Utils.division_zero((amount_avg - amount_pre_avg), amount_pre_avg) * 100, 2)
 
         # 当日成交量
@@ -683,7 +676,7 @@ class StockOneStopProcessor(Service):
         # ma日均成交量涨跌幅=(ma日均成交量 - 前一ma日均成交量)/前一ma日均成交量 * 100
         vol_avg_chg = 0
         # if vol_pre_avg is not None and vol_pre_avg != Decimal(0):
-        #     vol_avg_chg = StockOneStopProcessor.base_round_zero(StockOneStopProcessor.division_zero((vol_avg - vol_pre_avg), vol_pre_avg) * 100, 2)
+        #     vol_avg_chg = self.base_round_zero(self.division_zero((vol_avg - vol_pre_avg), vol_pre_avg) * 100, 2)
         vol_avg_chg = Utils.base_round_zero(Utils.division_zero((vol_avg - vol_pre_avg), vol_pre_avg) * 100, 2)
 
         # ma日均成交价=sum(前ma日(含)的成交额)/sum(ma日(含)的成交量)
@@ -693,7 +686,7 @@ class StockOneStopProcessor(Service):
         # ma日均成交价涨跌幅=(ma日均成交价 - 前一ma日均成交价)/前一ma日均成交价 * 100
         price_avg_chg = 0
         # if price_pre_avg is not None and price_pre_avg != Decimal(0):
-        #     price_avg_chg = StockOneStopProcessor.base_round_zero(StockOneStopProcessor.division_zero((price_avg - price_pre_avg), price_pre_avg) * 100, 2)
+        #     price_avg_chg = self.base_round_zero(self.division_zero((price_avg - price_pre_avg), price_pre_avg) * 100, 2)
         price_avg_chg = Utils.base_round_zero(Utils.division_zero((price_avg - price_pre_avg), price_pre_avg) * 100, 2)
         # print('price_avg', price_avg, 'price_pre_avg', price_pre_avg, 'price_avg_chg', price_avg_chg)
 
@@ -716,17 +709,24 @@ class StockOneStopProcessor(Service):
                 price_avg, price_pre_avg, price_avg_chg,
                 amount_flow_chg, vol_flow_chg, close_ma_price_avg_chg]
 
-    @staticmethod
-    def processing_average_line_avg(ma, security_code, r, queue):
+    def processing_average_line_avg(self, ma):
+        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
         """
         股票均线数据涨跌幅平均数据处理方法
         :param ma: 均线类型
         :return: 
         """
-        average_line_avg_max_the_date = StockOneStopProcessor.dbService.get_average_line_avg_max_the_date(ma, security_code)
-        decline_ma_the_date = StockOneStopProcessor.dbService.get_average_line_avg_decline_max_the_date(ma, average_line_avg_max_the_date)
-        r.lpush(queue, ['StockOneStopProcessor', StockOneStopProcessor.get_method_name(), 'ma', ma, security_code, 'average_line_avg_max_the_date', average_line_avg_max_the_date, 'decline_ma_the_date', decline_ma_the_date])
-        result = StockOneStopProcessor.dbService.get_average_line(ma, security_code, decline_ma_the_date)
+        average_line_avg_max_the_date = self.dbService.get_average_line_avg_max_the_date(ma, self.security_code)
+        decline_ma_the_date = self.dbService.get_average_line_avg_decline_max_the_date(ma, average_line_avg_max_the_date)
+        log_list = self.deepcopy(self.log_list)
+        log_list.append('ma')
+        log_list.append(ma)
+        log_list.append('average_line_avg_max_the_date')
+        log_list.append(average_line_avg_max_the_date)
+        log_list.append('decline_ma_the_date')
+        log_list.append(decline_ma_the_date)
+        self.redisService.put_log(log_list)
+        result = self.dbService.get_average_line(ma, self.security_code, decline_ma_the_date)
         len_result = len(result)
         if len_result < ma:
             return
@@ -753,8 +753,8 @@ class StockOneStopProcessor(Service):
                     # 返回值list_data list [the_date,
                     # close_avg_chg_avg, amount_avg_chg_avg, vol_avg_chg_avg,
                     # price_avg_chg_avg, amount_flow_chg_avg, vol_flow_chg_avg]
-                    list_data = StockOneStopProcessor.analysis_average_line_avg(ma, temp_line_tuple)
-                    upsert_sql = StockOneStopProcessor.upsert_average_line_avg.format(security_code=Utils.quotes_surround(security_code),
+                    list_data = self.analysis_average_line_avg(ma, temp_line_tuple)
+                    upsert_sql = self.upsert_average_line_avg.format(security_code=Utils.quotes_surround(self.security_code),
                                                     the_date=Utils.quotes_surround(list_data[0].strftime('%Y-%m-%d')),
                                                     ma=ma,
                                                     close_avg_chg_avg=list_data[1],
@@ -768,7 +768,7 @@ class StockOneStopProcessor(Service):
 
                     # 批量(100)提交数据更新
                     if len(upsert_sql_list) == 1000:
-                        StockOneStopProcessor.dbService.insert_many(upsert_sql_list)
+                        self.dbService.insert_many(upsert_sql_list)
                         process_line += '='
                         upsert_sql_list = []
                         upsert_sql_list.append(upsert_sql)
@@ -777,18 +777,15 @@ class StockOneStopProcessor(Service):
                         else:
                             progress = Utils.base_round(Utils.division_zero(add_up, (len_result - ma + 1)) * 100, 2)
 
-                        progress_log_list = ['StockOneStopProcessor']
-                        progress_log_list.append(StockOneStopProcessor.get_method_name())
-                        progress_log_list.append('ma')
-                        progress_log_list.append(ma)
-                        progress_log_list.append('security_code')
-                        progress_log_list.append(security_code)
-                        progress_log_list.append('progress')
-                        progress_log_list.append(add_up)
-                        progress_log_list.append((len_result - ma + 1))
-                        progress_log_list.append(process_line)
-                        progress_log_list.append(progress)
-                        r.lpush(queue, progress_log_list)
+                        log_list = self.deepcopy(self.log_list)
+                        log_list.append('ma')
+                        log_list.append(ma)
+                        log_list.append('progress')
+                        log_list.append(add_up)
+                        log_list.append((len_result - ma + 1))
+                        log_list.append(process_line)
+                        log_list.append(progress)
+                        self.redisService.put_log(log_list)
                     else:
                         if upsert_sql is not None:
                             upsert_sql_list.append(upsert_sql)
@@ -796,43 +793,37 @@ class StockOneStopProcessor(Service):
 
                 # 处理最后一批security_code的更新语句
                 if len(upsert_sql_list) > 0:
-                    StockOneStopProcessor.dbService.insert_many(upsert_sql_list)
+                    self.dbService.insert_many(upsert_sql_list)
                     process_line += '='
                 if len_result == ma:
                     progress = Utils.base_round(1 * 100, 2)
                 else:
                     progress = Utils.base_round(Utils.division_zero(add_up, (len_result - ma + 1)) * 100, 2)
 
-                progress_log_list = ['StockOneStopProcessor']
-                progress_log_list.append(StockOneStopProcessor.get_method_name())
-                progress_log_list.append('ma')
-                progress_log_list.append(ma)
-                progress_log_list.append('security_code')
-                progress_log_list.append(security_code)
-                progress_log_list.append('progress')
-                progress_log_list.append(add_up)
-                progress_log_list.append((len_result - ma + 1))
-                progress_log_list.append(process_line)
-                progress_log_list.append(progress)
-                r.lpush(queue, progress_log_list)
+                log_list = self.deepcopy(self.log_list)
+                log_list.append('ma')
+                log_list.append(ma)
+                log_list.append('progress')
+                log_list.append(add_up)
+                log_list.append((len_result - ma + 1))
+                log_list.append(process_line)
+                log_list.append(progress)
+                self.redisService.put_log(log_list)
         except Exception:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             line_no = traceback.extract_stack()[-2][1]
-            error_log_list = ['StockOneStopProcessor']
-            error_log_list.append(StockOneStopProcessor.get_method_name())
-            error_log_list.append('ma')
-            error_log_list.append(ma)
-            error_log_list.append('security_code')
-            error_log_list.append(security_code)
-            error_log_list.append('line_no')
-            error_log_list.append(line_no)
-            error_log_list.append(exc_type)
-            error_log_list.append(exc_value)
-            error_log_list.append(exc_traceback)
-            r.lpush(queue, error_log_list, logging.ERROR)
+            log_list = self.deepcopy(self.log_list)
+            log_list.append('ma')
+            log_list.append(ma)
+            log_list.append('line_no')
+            log_list.append(line_no)
+            log_list.append(exc_type)
+            log_list.append(exc_value)
+            log_list.append(exc_traceback)
+            self.redisService.put_log(log_list)
 
-    @staticmethod
-    def analysis_average_line_avg(ma, temp_line_tuple):
+    def analysis_average_line_avg(self, ma, temp_line_tuple):
+        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
         """
         均线数据涨跌幅平均计算方法
         :param ma: 均线类型
@@ -875,8 +866,8 @@ class StockOneStopProcessor(Service):
                 close_avg_chg_avg, amount_avg_chg_avg, vol_avg_chg_avg,
                 price_avg_chg_avg, amount_flow_chg_avg, vol_flow_chg_avg]
 
-    @staticmethod
-    def processing_real_time_kline(security_code, r, queue):
+    def processing_real_time_kline(self):
+        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
         """
         处理单只股票的实时行情
         :return: 
@@ -886,20 +877,26 @@ class StockOneStopProcessor(Service):
         end_date = datetime.datetime.now()
         start_date = end_date.replace(hour=9, minute=30, second=0, microsecond=0)
         end_date = end_date.replace(hour=15, minute=0, second=0, microsecond=0)
-        r.lpush(queue, ['StockOneStopProcessor', StockOneStopProcessor.get_method_name(), security_code, 'start_date', start_date, 'current_date', current_date, 'end_date', end_date])
-
+        log_list = self.deepcopy(self.log_list)
+        log_list.append('current_date')
+        log_list.append(current_date)
+        log_list.append('start_date')
+        log_list.append(start_date)
+        log_list.append('end_date')
+        log_list.append(end_date)
+        self.redisService.put_log(log_list)
         # if current_date <= end_date and current_date >= start_date:
         if True:
             # 5分钟K的实时行情
-            day_kline = tt.get_stock_bar(security_code, 1)
+            day_kline = tt.get_stock_bar(self.security_code, 1)
             # print('day_kline', day_kline)
             # 处理单只股票的实时行情，并入库
-            StockOneStopProcessor.analysis_real_time_kline(day_kline, start_date, security_code)
+            self.analysis_real_time_kline(day_kline, start_date)
             # 股票日K涨跌幅处理方法
-            StockOneStopProcessor.procesing_day_kline_after(security_code)
+            self.procesing_day_kline_after()
 
-    @staticmethod
-    def analysis_real_time_kline(day_kline, start_date, security_code, r, queue):
+    def analysis_real_time_kline(self, day_kline, start_date):
+        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
         """
         解析单只股票的实时行情，并入库
         :param day_kline: 
@@ -916,15 +913,12 @@ class StockOneStopProcessor(Service):
             total_amount = 0
             total_vol = 0
             if indexes_values is None or len(indexes_values) == 0:
-                warn_log_list = ['StockOneStopProcessor']
-                warn_log_list.append(StockOneStopProcessor.get_method_name())
-                warn_log_list.append('security_code')
-                warn_log_list.append(security_code)
-                warn_log_list.append('start_date')
-                warn_log_list.append(start_date)
-                warn_log_list.append('tt.get_stock_bar(security_code, 1)')
-                warn_log_list.append('indexes_values is None')
-                r.lpush(queue, warn_log_list, logging.WARNING)
+                log_list = self.deepcopy(self.log_list)
+                log_list.append('start_date')
+                log_list.append(start_date)
+                log_list.append('tt.get_stock_bar(, 1)')
+                log_list.append('indexes_values is None')
+                self.redisService.put_log(log_list, logging.WARNING)
                 return
             for idx in indexes_values:
                 idx_datetime = datetime.datetime.utcfromtimestamp(idx.astype('O') / 1e9)
@@ -977,8 +971,8 @@ class StockOneStopProcessor(Service):
             if the_date is not None:
                 total_amount = total_amount * 100
                 total_vol = total_vol * 100
-                upsert_sql = StockOneStopProcessor.upsert_day_kline.format(
-                    security_code=Utils.quotes_surround(security_code),
+                upsert_sql = self.upsert_day_kline.format(
+                    security_code=Utils.quotes_surround(self.security_code),
                     the_date=Utils.quotes_surround(the_date),
                     amount=total_amount,
                     vol=total_vol,
@@ -987,4 +981,4 @@ class StockOneStopProcessor(Service):
                     low=low_min,
                     close=close_last
                 )
-                StockOneStopProcessor.dbService.insert(upsert_sql)
+                self.dbService.insert(upsert_sql)

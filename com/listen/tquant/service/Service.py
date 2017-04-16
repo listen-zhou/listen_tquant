@@ -20,3 +20,6 @@ class Service():
 
     def get_classs_name(self):
         return self.__class__.__name__
+
+    def deepcopy(self, log_list):
+        return copy.deepcopy(log_list)
