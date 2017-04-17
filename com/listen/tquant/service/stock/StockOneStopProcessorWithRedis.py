@@ -8,12 +8,8 @@ import numpy
 
 from com.listen.tquant.dbservice.Service import DbService
 from com.listen.tquant.utils.Utils import Utils
-import logging
 from com.listen.tquant.service.Service import Service
-import time
-from com.listen.tquant.log.Logger import Logger
-import inspect
-from com.listen.tquant.redis.RedisService import RedisService
+import traceback
 
 class StockOneStopProcessor(Service):
     """
@@ -61,28 +57,22 @@ class StockOneStopProcessor(Service):
                   'amount_flow_chg_avg=values(amount_flow_chg_avg), vol_flow_chg_avg=values(vol_flow_chg_avg) '
     
     dbService = DbService()
-    redisService = RedisService()
 
-    def consume(self):
-        print('consume init ...')
-        self.redisService.get_log()
-    
     def __init__(self, security_code, mas):
         self.security_code = security_code
         self.mas = mas
-        self.log_list = [self.get_classs_name(), self.get_method_name(), self.security_code]
-        log_list = self.deepcopy(self.log_list)
+        log_list = [self.now(), self.info(), self.get_classs_name(), self.security_code]
+        log_list.append(self.get_method_name())
         log_list.append('mas')
         log_list.append(mas)
         log_list.append('init...')
-        self.redisService.put_log(log_list)
-        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
+        self.print_log(log_list)
 
     def processing_single_security_code(self):
-        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
-        log_list = self.deepcopy(self.log_list)
+        log_list = [self.now(), self.info(), self.get_classs_name(), self.security_code]
+        log_list.append(self.get_method_name())
         log_list.append('init...')
-        self.redisService.put_log(log_list)
+        self.print_log(log_list)
         """
         单只股票处理方法
         :return: 
@@ -94,17 +84,17 @@ class StockOneStopProcessor(Service):
         self.processing_real_time_kline()
 
     def processing_day_kline(self):
-        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
         """
         股票日K数据处理，分全量还是增量
         :return: 
         """
         try:
             recent_few_days = self.dbService.get_day_kline_recentdays(self.security_code)
-            log_list = self.deepcopy(self.log_list)
+            log_list = [self.now(), self.info(), self.get_classs_name(), self.security_code]
+            log_list.append(self.get_method_name())
             log_list.append('recent_few_days')
             log_list.append(recent_few_days)
-            self.redisService.put_log(log_list)
+            self.print_log(log_list)
             if recent_few_days is not None and recent_few_days > 0:
                 result = tt.get_last_n_daybar(self.security_code, recent_few_days, 'qfq')
             else:
@@ -149,13 +139,14 @@ class StockOneStopProcessor(Service):
                                 upsert_sql_list.append(upsert_sql)
                             progress = Utils.base_round(Utils.division_zero(add_up, len_indexes) * 100, 2)
 
-                            log_list = self.deepcopy(self.log_list)
+                            log_list = [self.now(), self.info(), self.get_classs_name(), self.security_code]
+                            log_list.append(self.get_method_name())
                             log_list.append('progress')
                             log_list.append(add_up)
                             log_list.append(len_indexes)
                             log_list.append(process_line)
                             log_list.append(str(progress) + '%')
-                            self.redisService.put_log(log_list)
+                            self.print_log(log_list)
                         else:
                             upsert_sql_list.append(upsert_sql)
                     # 处理最后一批security_code的更新语句
@@ -164,42 +155,40 @@ class StockOneStopProcessor(Service):
                         process_line += '='
                     progress = Utils.base_round(Utils.division_zero(add_up, len(indexes_values)) * 100, 2)
 
-                    log_list = self.deepcopy(self.log_list)
+                    log_list = [self.now(), self.info(), self.get_classs_name(), self.security_code]
+                    log_list.append(self.get_method_name())
                     log_list.append('progress')
                     log_list.append(add_up)
                     log_list.append(len_indexes)
                     log_list.append(process_line)
                     log_list.append(progress)
-                    self.redisService.put_log(log_list)
+                    self.print_log(log_list)
                 else:
-                    log_list = self.deepcopy(self.log_list)
+                    log_list = [self.now(), self.info(), self.get_classs_name(), self.security_code]
+                    log_list.append(self.get_method_name())
                     log_list.append('result`s indexes_values is None')
-                    self.redisService.put_log(log_list, logging.WARNING)
+                    self.print_log(log_list)
             else:
-                log_list = self.deepcopy(self.log_list)
+                log_list = [self.now(), self.info(), self.get_classs_name(), self.security_code]
+                log_list.append(self.get_method_name())
                 log_list.append('tt.get_all_daybar or tt.get_last_n_daybar result is None')
-                self.redisService.put_log(log_list, logging.WARNING)
+                self.print_log(log_list)
         except Exception:
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            line_no = traceback.extract_stack()[-2][1]
-            log_list = self.deepcopy(self.log_list)
-            log_list.append('line_no')
-            log_list.append(line_no)
-            log_list.append(exc_type)
-            log_list.append(exc_value)
-            log_list.append(exc_traceback)
-            self.redisService.put_log(log_list, logging.ERROR)
+            log_list = [self.now(), self.info(), self.get_classs_name(), self.security_code]
+            log_list.append(self.get_method_name())
+            log_list.append(traceback.format_exc())
+            self.print_log(log_list)
 
     def procesing_day_kline_after(self):
-        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
         """
         日K数据入库后计算涨跌幅，均线，均值等数据，并入库
         :return: 
         """
         # 股票日K涨跌幅处理方法
-        log_list = self.deepcopy(self.log_list)
+        log_list = [self.now(), self.info(), self.get_classs_name(), self.security_code]
+        log_list.append(self.get_method_name())
         log_list.append('init...')
-        self.redisService.put_log(log_list)
+        self.print_log(log_list)
         self.processing_day_kline_change_percent()
         if self.mas is not None and len(self.mas) > 0:
             for ma in self.mas:
@@ -209,7 +198,6 @@ class StockOneStopProcessor(Service):
                 self.processing_average_line_avg(ma)
 
     def analysis_columns_day_kline(self, day_kline, idx):
-        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
         """
         股票日K数据处理方法
         :param day_kline: 日K的DataFrame
@@ -252,28 +240,23 @@ class StockOneStopProcessor(Service):
 
             return [the_date, amount, vol, open, high, low, close]
         except Exception:
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            line_no = traceback.extract_stack()[-2][1]
-            log_list = self.deepcopy(self.log_list)
-            log_list.append('line_no')
-            log_list.append(line_no)
-            log_list.append(exc_type)
-            log_list.append(exc_value)
-            log_list.append(exc_traceback)
-            self.redisService.put_log(log_list, logging.ERROR)
+            log_list = [self.now(), self.info(), self.get_classs_name(), self.security_code]
+            log_list.append(self.get_method_name())
+            log_list.append(traceback.format_exc())
+            self.print_log(log_list)
             return None
 
     def processing_day_kline_change_percent(self):
-        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
         """
         股票日K数据涨跌幅处理方法
         :return: 
         """
         day_kline_max_the_date = self.dbService.get_day_kline_max_the_date(self.security_code)
-        log_list = self.deepcopy(self.log_list)
+        log_list = [self.now(), self.info(), self.get_classs_name(), self.security_code]
+        log_list.append(self.get_method_name())
         log_list.append('day_kline_max_the_date')
         log_list.append(day_kline_max_the_date)
-        self.redisService.put_log(log_list)
+        self.print_log(log_list)
         result = self.dbService.get_stock_day_kline(self.security_code, day_kline_max_the_date)
         len_result = len(result)
         # print('result', result)
@@ -345,13 +328,14 @@ class StockOneStopProcessor(Service):
                 # 这个地方为什么要add_up + 1？因为第一条数据不会被处理，所以总数会少一条，所以在计算进度的时候要+1
                 progress = Utils.base_round(Utils.division_zero((add_up + 1), len_result) * 100, 2)
 
-                log_list = self.deepcopy(self.log_list)
+                log_list = [self.now(), self.info(), self.get_classs_name(), self.security_code]
+                log_list.append(self.get_method_name())
                 log_list.append('progress')
                 log_list.append(add_up + 1)
                 log_list.append(len_result)
                 log_list.append(process_line)
                 log_list.append(progress)
-                self.redisService.put_log(log_list)
+                self.print_log(log_list)
             else:
                 if upsert_sql is not None:
                     upsert_sql_list.append(upsert_sql)
@@ -363,16 +347,16 @@ class StockOneStopProcessor(Service):
             process_line += '='
         progress = Utils.base_round(Utils.division_zero((add_up + 1), len_result) * 100, 2)
 
-        log_list = self.deepcopy(self.log_list)
+        log_list = [self.now(), self.info(), self.get_classs_name(), self.security_code]
+        log_list.append(self.get_method_name())
         log_list.append('progress')
         log_list.append(add_up + 1)
         log_list.append(len_result)
         log_list.append(process_line)
         log_list.append(progress)
-        self.redisService.put_log(log_list)
+        self.print_log(log_list)
 
     def analysis_day_kline_change_percent(self, temp_kline_tuple, price_avg_pre):
-        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
         """
         股票日K涨跌幅计算方法
         :param temp_kline_tuple: 相邻两个日K数据的列表
@@ -427,19 +411,13 @@ class StockOneStopProcessor(Service):
 
             return [the_date, close1, close_chg, amount1, amount_chg, vol1, vol_chg, price_avg, close_price_avg_chg, price_avg_chg]
         except Exception:
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            line_no = traceback.extract_stack()[-2][1]
-            log_list = self.deepcopy(self.log_list)
-            log_list.append('line_no')
-            log_list.append(line_no)
-            log_list.append(exc_type)
-            log_list.append(exc_value)
-            log_list.append(exc_traceback)
-            self.redisService.put_log(log_list, logging.ERROR)
+            log_list = [self.now(), self.error(), self.get_classs_name(), self.security_code]
+            log_list.append(self.get_method_name())
+            log_list.append(traceback.format_exc())
+            self.print_log(log_list)
             return None
 
     def processing_average_line(self, ma):
-        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
         """
         股票均线数据处理方法
         :param ma: 
@@ -447,15 +425,15 @@ class StockOneStopProcessor(Service):
         """
         average_line_max_the_date = self.dbService.get_average_line_max_the_date(ma, self.security_code)
         decline_ma_the_date = self.dbService.get_average_line_decline_max_the_date(ma, average_line_max_the_date)
-        log_list = self.deepcopy(self.log_list)
+        log_list = [self.now(), self.info(), self.get_classs_name(), self.security_code]
+        log_list.append(self.get_method_name())
         log_list.append('ma')
         log_list.append(ma)
         log_list.append('average_line_max_the_date')
         log_list.append(average_line_max_the_date)
         log_list.append('decline_ma_the_date')
         log_list.append(decline_ma_the_date)
-        self.redisService.put_log(log_list)
-        # print('decline_ma_the_date', decline_ma_the_date, 'average_line_max_the_date', average_line_max_the_date)
+        self.print_log(log_list)
         result = self.dbService.get_stock_day_kline(self.security_code, decline_ma_the_date)
         len_result = len(result)
         # print('ma', ma, 'len_result', len_result)
@@ -495,7 +473,6 @@ class StockOneStopProcessor(Service):
                         # vol, vol_avg, vol_pre_avg, vol_avg_chg,
                         # price_avg, price_pre_avg, price_avg_chg,
                         # amount_flow_chg, vol_flow_chg, close_ma_price_avg_chg]
-                    # print('the_date', the_date, 'previous_data', previous_data)
                     list_data = self.analysis_average_line(ma, temp_line_tuple, previous_data)
                     """
                     均线数据入库（3,5,10日等）
@@ -546,7 +523,6 @@ class StockOneStopProcessor(Service):
                                                                                         vol_flow_chg=list_data[17],
                                                                                         close_ma_price_avg_chg=list_data[18]
                                                    )
-                    # print(upsert_sql)
                     # 将本次的处理结果重新赋值到previous_data中
                     # close_pre_avg, amount_pre_avg, vol_pre_avg, price_pre_avg
                     previous_data = [[list_data[2], list_data[6], list_data[10], list_data[13]]]
@@ -562,7 +538,8 @@ class StockOneStopProcessor(Service):
                         else:
                             progress = Utils.base_round_zero(Utils.division_zero(add_up, (len_result - ma + 1)) * 100, 2)
 
-                        log_list = self.deepcopy(self.log_list)
+                        log_list = [self.now(), self.info(), self.get_classs_name(), self.security_code]
+                        log_list.append(self.get_method_name())
                         log_list.append('ma')
                         log_list.append(ma)
                         log_list.append('progress')
@@ -570,7 +547,7 @@ class StockOneStopProcessor(Service):
                         log_list.append((len_result - ma + 1))
                         log_list.append(process_line)
                         log_list.append(progress)
-                        self.redisService.put_log(log_list)
+                        self.print_log(log_list)
                     else:
                         if upsert_sql is not None:
                             upsert_sql_list.append(upsert_sql)
@@ -585,7 +562,8 @@ class StockOneStopProcessor(Service):
                 else:
                     progress = Utils.base_round_zero(Utils.division_zero(add_up, (len_result - ma + 1)) * 100, 2)
 
-                log_list = self.deepcopy(self.log_list)
+                log_list = [self.now(), self.info(), self.get_classs_name(), self.security_code]
+                log_list.append(self.get_method_name())
                 log_list.append('ma')
                 log_list.append(ma)
                 log_list.append('progress')
@@ -593,22 +571,16 @@ class StockOneStopProcessor(Service):
                 log_list.append((len_result - ma + 1))
                 log_list.append(process_line)
                 log_list.append(progress)
-                self.redisService.put_log(log_list)
+                self.print_log(log_list)
         except Exception:
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            line_no = traceback.extract_stack()[-2][1]
-            log_list = self.deepcopy(self.log_list)
+            log_list = [self.now(), self.error(), self.get_classs_name(), self.security_code]
+            log_list.append(self.get_method_name())
             log_list.append('ma')
             log_list.append(ma)
-            log_list.append('line_no')
-            log_list.append(line_no)
-            log_list.append(exc_type)
-            log_list.append(exc_value)
-            log_list.append(exc_traceback)
-            self.redisService.put_log(log_list, logging.ERROR)
+            log_list.append(traceback.format_exc())
+            self.print_log(log_list)
 
     def analysis_average_line(self, ma, temp_line_tuple, previous_data):
-        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
         """
         股票均线数据计算方法
         :param ma: 均线类型
@@ -688,7 +660,6 @@ class StockOneStopProcessor(Service):
         # if price_pre_avg is not None and price_pre_avg != Decimal(0):
         #     price_avg_chg = self.base_round_zero(self.division_zero((price_avg - price_pre_avg), price_pre_avg) * 100, 2)
         price_avg_chg = Utils.base_round_zero(Utils.division_zero((price_avg - price_pre_avg), price_pre_avg) * 100, 2)
-        # print('price_avg', price_avg, 'price_pre_avg', price_pre_avg, 'price_avg_chg', price_avg_chg)
 
         # 日金钱流向涨跌幅=日成交额/ma日(含)均成交额 * 100
         amount_flow_chg = Utils.base_round_zero(Utils.division_zero(amount - amount_avg, amount_avg), 2)
@@ -710,7 +681,6 @@ class StockOneStopProcessor(Service):
                 amount_flow_chg, vol_flow_chg, close_ma_price_avg_chg]
 
     def processing_average_line_avg(self, ma):
-        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
         """
         股票均线数据涨跌幅平均数据处理方法
         :param ma: 均线类型
@@ -718,14 +688,15 @@ class StockOneStopProcessor(Service):
         """
         average_line_avg_max_the_date = self.dbService.get_average_line_avg_max_the_date(ma, self.security_code)
         decline_ma_the_date = self.dbService.get_average_line_avg_decline_max_the_date(ma, average_line_avg_max_the_date)
-        log_list = self.deepcopy(self.log_list)
+        log_list = [self.now(), self.info(), self.get_classs_name(), self.security_code]
+        log_list.append(self.get_method_name())
         log_list.append('ma')
         log_list.append(ma)
         log_list.append('average_line_avg_max_the_date')
         log_list.append(average_line_avg_max_the_date)
         log_list.append('decline_ma_the_date')
         log_list.append(decline_ma_the_date)
-        self.redisService.put_log(log_list)
+        self.print_log(log_list)
         result = self.dbService.get_average_line(ma, self.security_code, decline_ma_the_date)
         len_result = len(result)
         if len_result < ma:
@@ -764,8 +735,6 @@ class StockOneStopProcessor(Service):
                                                     amount_flow_chg_avg=list_data[5],
                                                     vol_flow_chg_avg=list_data[6]
                                                     )
-                    # print(upsert_sql)
-
                     # 批量(100)提交数据更新
                     if len(upsert_sql_list) == 1000:
                         self.dbService.insert_many(upsert_sql_list)
@@ -777,7 +746,8 @@ class StockOneStopProcessor(Service):
                         else:
                             progress = Utils.base_round(Utils.division_zero(add_up, (len_result - ma + 1)) * 100, 2)
 
-                        log_list = self.deepcopy(self.log_list)
+                        log_list = [self.now(), self.info(), self.get_classs_name(), self.security_code]
+                        log_list.append(self.get_method_name())
                         log_list.append('ma')
                         log_list.append(ma)
                         log_list.append('progress')
@@ -785,7 +755,7 @@ class StockOneStopProcessor(Service):
                         log_list.append((len_result - ma + 1))
                         log_list.append(process_line)
                         log_list.append(progress)
-                        self.redisService.put_log(log_list)
+                        self.print_log(log_list)
                     else:
                         if upsert_sql is not None:
                             upsert_sql_list.append(upsert_sql)
@@ -800,7 +770,8 @@ class StockOneStopProcessor(Service):
                 else:
                     progress = Utils.base_round(Utils.division_zero(add_up, (len_result - ma + 1)) * 100, 2)
 
-                log_list = self.deepcopy(self.log_list)
+                log_list = [self.now(), self.info(), self.get_classs_name(), self.security_code]
+                log_list.append(self.get_method_name())
                 log_list.append('ma')
                 log_list.append(ma)
                 log_list.append('progress')
@@ -808,22 +779,16 @@ class StockOneStopProcessor(Service):
                 log_list.append((len_result - ma + 1))
                 log_list.append(process_line)
                 log_list.append(progress)
-                self.redisService.put_log(log_list)
+                self.print_log(log_list)
         except Exception:
-            exc_type, exc_value, exc_traceback = sys.exc_info()
-            line_no = traceback.extract_stack()[-2][1]
-            log_list = self.deepcopy(self.log_list)
+            log_list = [self.now(), self.info(), self.get_classs_name(), self.security_code]
+            log_list.append(self.get_method_name())
             log_list.append('ma')
             log_list.append(ma)
-            log_list.append('line_no')
-            log_list.append(line_no)
-            log_list.append(exc_type)
-            log_list.append(exc_value)
-            log_list.append(exc_traceback)
-            self.redisService.put_log(log_list)
+            log_list.append(traceback.format_exc())
+            self.print_log(log_list)
 
     def analysis_average_line_avg(self, ma, temp_line_tuple):
-        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
         """
         均线数据涨跌幅平均计算方法
         :param ma: 均线类型
@@ -867,7 +832,6 @@ class StockOneStopProcessor(Service):
                 price_avg_chg_avg, amount_flow_chg_avg, vol_flow_chg_avg]
 
     def processing_real_time_kline(self):
-        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
         """
         处理单只股票的实时行情
         :return: 
@@ -877,14 +841,15 @@ class StockOneStopProcessor(Service):
         end_date = datetime.datetime.now()
         start_date = end_date.replace(hour=9, minute=30, second=0, microsecond=0)
         end_date = end_date.replace(hour=15, minute=0, second=0, microsecond=0)
-        log_list = self.deepcopy(self.log_list)
+        log_list = [self.now(), self.info(), self.get_classs_name(), self.security_code]
+        log_list.append(self.get_method_name())
         log_list.append('current_date')
         log_list.append(current_date)
         log_list.append('start_date')
         log_list.append(start_date)
         log_list.append('end_date')
         log_list.append(end_date)
-        self.redisService.put_log(log_list)
+        self.print_log(log_list)
         # if current_date <= end_date and current_date >= start_date:
         if True:
             # 5分钟K的实时行情
@@ -896,7 +861,6 @@ class StockOneStopProcessor(Service):
             self.procesing_day_kline_after()
 
     def analysis_real_time_kline(self, day_kline, start_date):
-        print(self.get_classs_name(), self.get_method_name(), self.security_code, 'init...')
         """
         解析单只股票的实时行情，并入库
         :param day_kline: 
@@ -913,12 +877,13 @@ class StockOneStopProcessor(Service):
             total_amount = 0
             total_vol = 0
             if indexes_values is None or len(indexes_values) == 0:
-                log_list = self.deepcopy(self.log_list)
+                log_list = [self.now(), self.warn(), self.get_classs_name(), self.security_code]
+                log_list.append(self.get_method_name())
                 log_list.append('start_date')
                 log_list.append(start_date)
                 log_list.append('tt.get_stock_bar(, 1)')
                 log_list.append('indexes_values is None')
-                self.redisService.put_log(log_list, logging.WARNING)
+                self.print_log(log_list)
                 return
             for idx in indexes_values:
                 idx_datetime = datetime.datetime.utcfromtimestamp(idx.astype('O') / 1e9)

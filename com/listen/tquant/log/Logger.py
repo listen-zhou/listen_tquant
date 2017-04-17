@@ -45,6 +45,7 @@ class Logger():
 
     def base_log(self, list, level=logging.INFO):
         message = self.format_list(list)
+        print('base_log', message)
         if logging.DEBUG == level:
             self.log.debug(message)
         elif logging.INFO == level:
