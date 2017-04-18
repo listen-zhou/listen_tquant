@@ -80,6 +80,9 @@ class DbService(object):
             print(exc_type, exc_value, exc_traceback, 'sql error:', query_sql)
             return None
 
+
+
+    #######################################################################
     def query_all_security_codes(self):
         sql = "select security_code " \
               "from tquant_security_info "
@@ -165,18 +168,31 @@ class DbService(object):
             return tuple_security_codes
         return None
 
+
+    def get_day_kline_exist_max_the_date(self, security_code):
+        sql = "select the_date from tquant_stock_day_kline " \
+              "where security_code = {security_code} " \
+              "order by the_date desc limit 1"
+        sql = sql.format(security_code=Utils.quotes_surround(security_code))
+        the_date = self.query(sql)
+        # print(sql)
+        if the_date is not None and len(the_date) > 0:
+            return the_date[0][0]
+        else:
+            return None
+
+    ################################################################################################
+
     def get_stock_day_kline(self, security_code, decline_ma_the_date):
         sql = "select the_date, close, amount, vol, price_avg " \
               "from tquant_stock_day_kline " \
               "where security_code = {security_code} "
-        max_the_date = None
+        sql = sql.format(security_code=Utils.quotes_surround(security_code))
         if decline_ma_the_date is not None:
             sql += "and the_date >= {max_the_date} "
             max_the_date = decline_ma_the_date.strftime('%Y-%m-%d')
+            sql = sql.format(max_the_date=Utils.quotes_surround(max_the_date))
         sql += "order by the_date asc "
-        sql = sql.format(security_code=Utils.quotes_surround(security_code),
-                         max_the_date=Utils.quotes_surround(max_the_date)
-                         )
         result = self.query(sql)
         return result
 
@@ -247,22 +263,24 @@ class DbService(object):
         else:
             return None
 
-    def get_average_line_decline_max_the_date(self, ma, average_line_max_the_date):
+    def get_average_line_decline_max_the_date(self, ma, average_line_max_the_date, security_code):
         if average_line_max_the_date is not None and average_line_max_the_date != '':
-            sql = "select min(the_date) from (select the_date from tquant_calendar_info " \
-                  "where the_date <= {average_line_max_the_date} " \
-                  "order by the_date desc limit {ma}) a"
-        else:
-            sql = "select min(the_date) from tquant_calendar_info"
-        sql = sql.format(average_line_max_the_date=Utils.quotes_surround(str(average_line_max_the_date)),
-                        ma=ma
-                         )
-        # print(sql)
-        the_date = self.query(sql)
-        # print('average_line_decline_max_the_date', the_date)
-        if the_date is not None and the_date != '':
-            decline_ma_the_date = the_date[0][0]
-            return decline_ma_the_date
+            sql = "select the_date from tquant_stock_day_kline " \
+                  "where security_code = {security_code}" \
+                  "the_date <= {average_line_max_the_date} " \
+                  "order by the_date desc limit {ma} "
+            sql = sql.format(security_code=Utils.quotes_surround(security_code),
+                             average_line_max_the_date=Utils.quotes_surround(str(average_line_max_the_date)),
+                             ma=ma
+                             )
+            # print(sql)
+            the_dates = self.query(sql)
+            # print('average_line_decline_max_the_date', the_date)
+            if the_dates is not None and len(the_dates) > 0:
+                decline_ma_the_date = the_dates[len(the_dates) - 1][0]
+                return decline_ma_the_date
+            else:
+                return None
         else:
             return None
 
@@ -284,39 +302,30 @@ class DbService(object):
               "and vol_flow_chg_avg is not null " \
               "order by the_date desc limit 1"
         the_date = self.query(sql.format(security_code=Utils.quotes_surround(security_code),
-                                                   ma=ma
-                                         )
-                              )
-        if the_date is not None and len(the_date) > 0:
-            return the_date[0][0]
-        else:
-            return None
-
-    def get_average_line_avg_decline_max_the_date(self, ma, average_line_avg_max_the_date):
-        if average_line_avg_max_the_date is not None and average_line_avg_max_the_date != '':
-            sql = "select min(the_date) from (select the_date from tquant_calendar_info " \
-                  "where the_date <= {average_line_max_the_date} " \
-                  "order by the_date desc limit {ma}) a"
-        else:
-            sql = "select min(the_date) from tquant_calendar_info"
-        the_date = self.query(sql.format(average_line_max_the_date=Utils.quotes_surround(str(average_line_avg_max_the_date)),
                                          ma=ma
                                          )
                               )
-        if the_date is not None and the_date != '':
-            decline_ma_the_date = the_date[0][0]
-            return decline_ma_the_date
+        if the_date is not None and len(the_date) > 0:
+            return the_date[0][0]
         else:
             return None
 
-    def get_day_kline_exist_max_the_date(self, security_code):
-        sql = "select max(the_date) from tquant_stock_day_kline " \
-              "where security_code = {security_code} "
-        sql = sql.format(security_code=Utils.quotes_surround(security_code))
-        the_date = self.query(sql)
-        # print(sql)
-        if the_date is not None and len(the_date) > 0:
-            return the_date[0][0]
+    def get_average_line_avg_decline_max_the_date(self, ma, average_line_avg_max_the_date, security_code):
+        if average_line_avg_max_the_date is not None and average_line_avg_max_the_date != '':
+            sql = "select the_date from tquant_stock_day_kline " \
+                  "where security_code = {security_code} " \
+                  "the_date <= {average_line_max_the_date} " \
+                  "order by the_date desc limit {ma} "
+            the_dates = self.query(sql.format(security_code=Utils.quotes_surround(security_code),
+                                             average_line_max_the_date=Utils.quotes_surround(str(average_line_avg_max_the_date)),
+                                             ma=ma
+                                             )
+                                  )
+            if the_dates is not None and len(the_dates) > 0:
+                decline_ma_the_date = the_dates[len(the_dates) - 1][0]
+                return decline_ma_the_date
+            else:
+                return None
         else:
             return None
 

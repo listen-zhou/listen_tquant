@@ -131,7 +131,7 @@ class StockOneStopProcessor(Service):
                         else:
                             continue
                         # 批量(100)提交数据更新
-                        if len(upsert_sql_list) == 3000:
+                        if len(upsert_sql_list) == 200:
                             self.dbService.insert_many(upsert_sql_list)
                             process_line += '='
                             upsert_sql_list = []
@@ -319,7 +319,7 @@ class StockOneStopProcessor(Service):
             else:
                 upsert_sql = None
             # 批量(100)提交数据更新
-            if len(upsert_sql_list) == 1000:
+            if len(upsert_sql_list) == 200:
                 self.dbService.insert_many(upsert_sql_list)
                 process_line += '='
                 upsert_sql_list = []
@@ -424,7 +424,7 @@ class StockOneStopProcessor(Service):
         :return: 
         """
         average_line_max_the_date = self.dbService.get_average_line_max_the_date(ma, self.security_code)
-        decline_ma_the_date = self.dbService.get_average_line_decline_max_the_date(ma, average_line_max_the_date)
+        decline_ma_the_date = self.dbService.get_average_line_decline_max_the_date(ma, average_line_max_the_date, self.security_code)
         log_list = [self.now(), self.info(), self.get_classs_name(), self.security_code]
         log_list.append(self.get_method_name())
         log_list.append('ma')
@@ -528,7 +528,7 @@ class StockOneStopProcessor(Service):
                     previous_data = [[list_data[2], list_data[6], list_data[10], list_data[13]]]
 
                     # 批量(100)提交数据更新
-                    if len(upsert_sql_list) == 1000:
+                    if len(upsert_sql_list) == 200:
                         self.dbService.insert_many(upsert_sql_list)
                         process_line += '='
                         upsert_sql_list = []
@@ -687,7 +687,7 @@ class StockOneStopProcessor(Service):
         :return: 
         """
         average_line_avg_max_the_date = self.dbService.get_average_line_avg_max_the_date(ma, self.security_code)
-        decline_ma_the_date = self.dbService.get_average_line_avg_decline_max_the_date(ma, average_line_avg_max_the_date)
+        decline_ma_the_date = self.dbService.get_average_line_avg_decline_max_the_date(ma, average_line_avg_max_the_date, self.security_code)
         log_list = [self.now(), self.info(), self.get_classs_name(), self.security_code]
         log_list.append(self.get_method_name())
         log_list.append('ma')
@@ -736,7 +736,7 @@ class StockOneStopProcessor(Service):
                                                     vol_flow_chg_avg=list_data[6]
                                                     )
                     # 批量(100)提交数据更新
-                    if len(upsert_sql_list) == 1000:
+                    if len(upsert_sql_list) == 200:
                         self.dbService.insert_many(upsert_sql_list)
                         process_line += '='
                         upsert_sql_list = []
