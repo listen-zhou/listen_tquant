@@ -10,14 +10,14 @@ def long_time_task_wrapper(cls_instance):
     cls_instance.processing_single_security_code()
 
 if __name__ == '__main__':
-    cpu_count = multiprocessing.cpu_count()
-    manager = multiprocessing.Manager()
-    pool = manager.Pool()
-    pool = multiprocessing.Pool(processes=4)
-
-    dbService = DbService()
-    mas = [3, 5,10]
     while True:
+        cpu_count = multiprocessing.cpu_count()
+        manager = multiprocessing.Manager()
+        pool = manager.Pool()
+        pool = multiprocessing.Pool(processes=4)
+
+        dbService = DbService()
+        mas = [3, 5,10]
         securty_codes = dbService.get_worth_buying_stock()
         print('cpu_count', cpu_count, 'securty_codes len', len(securty_codes))
         if securty_codes is not None:

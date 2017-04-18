@@ -267,7 +267,7 @@ class DbService(object):
         if average_line_max_the_date is not None and average_line_max_the_date != '':
             sql = "select the_date from tquant_stock_day_kline " \
                   "where security_code = {security_code}" \
-                  "the_date <= {average_line_max_the_date} " \
+                  "and the_date <= {average_line_max_the_date} " \
                   "order by the_date desc limit {ma} "
             sql = sql.format(security_code=Utils.quotes_surround(security_code),
                              average_line_max_the_date=Utils.quotes_surround(str(average_line_max_the_date)),
@@ -314,7 +314,7 @@ class DbService(object):
         if average_line_avg_max_the_date is not None and average_line_avg_max_the_date != '':
             sql = "select the_date from tquant_stock_day_kline " \
                   "where security_code = {security_code} " \
-                  "the_date <= {average_line_max_the_date} " \
+                  "and the_date <= {average_line_max_the_date} " \
                   "order by the_date desc limit {ma} "
             the_dates = self.query(sql.format(security_code=Utils.quotes_surround(security_code),
                                              average_line_max_the_date=Utils.quotes_surround(str(average_line_avg_max_the_date)),
