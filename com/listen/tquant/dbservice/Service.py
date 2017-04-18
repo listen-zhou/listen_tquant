@@ -333,10 +333,13 @@ class DbService(object):
         max_the_date = self.get_day_kline_exist_max_the_date(security_code)
         recentdays = None
         if max_the_date is not None :
-            today = datetime.datetime.now()
-            max_the_date = datetime.datetime.now().replace(max_the_date.year, max_the_date.month, max_the_date.day)
+            today = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+            max_the_date = datetime.datetime.now().replace(max_the_date.year, max_the_date.month, max_the_date.day,
+                                                           0, 0, 0, 0)
             recentdays = (today - max_the_date).days
         # print('security_code', security_code, 'max_the_date', max_the_date, 'recentdays', recentdays)
+            if recentdays <= 0 or recentdays:
+                recentdays = 1
         return recentdays
 
     def get_worth_buying_stock(self):
