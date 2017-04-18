@@ -334,11 +334,10 @@ class DbService(object):
         recentdays = None
         if max_the_date is not None :
             today = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
-            max_the_date = datetime.datetime.now().replace(max_the_date.year, max_the_date.month, max_the_date.day,
-                                                           0, 0, 0, 0)
+            max_the_date = datetime.datetime.now().replace(max_the_date.year, max_the_date.month, max_the_date.day, 0, 0, 0, 0)
             recentdays = (today - max_the_date).days
         # print('security_code', security_code, 'max_the_date', max_the_date, 'recentdays', recentdays)
-            if recentdays <= 0 or recentdays:
+            if recentdays <= 0:
                 recentdays = 1
         return recentdays
 
