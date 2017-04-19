@@ -95,10 +95,12 @@ class StockOneStopProcessor(Service):
             log_list.append('recent_few_days')
             log_list.append(recent_few_days)
             self.print_log(log_list)
-            if recent_few_days is not None and recent_few_days > 0:
+            if recent_few_days is None:
+                result = tt.get_all_daybar(self.security_code, 'qfq')
+            elif recent_few_days > 0:
                 result = tt.get_last_n_daybar(self.security_code, recent_few_days, 'qfq')
             else:
-                result = tt.get_all_daybar(self.security_code, 'qfq')
+                return
 
             if result.empty == False:
                 # 索引值为日期
