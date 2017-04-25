@@ -343,3 +343,21 @@ class DbService(object):
         sql = "select security_code, exchange_code, security_name, worth_buying " \
               "from tquant_security_info where worth_buying > 0 "
         return self.query(sql)
+
+    def get_chg_avg_pre_data(self, security_code, the_date, ma):
+        sql = "select close_avg_chg_avg, close_avg_chg_avg_diff, " \
+              "amount_avg_chg_avg, amount_avg_chg_avg_diff, " \
+              "vol_avg_chg_avg, vol_avg_chg_avg_diff, " \
+              "price_avg_chg_avg, price_avg_chg_avg_diff, " \
+              "amount_flow_chg_avg, amount_flow_chg_avg_diff, " \
+              "vol_flow_chg_avg, vol_flow_chg_avg_diff " \
+              "from tquant_stock_average_line " \
+              "where security_code = {security_code} " \
+              "and the_date < {the_date} " \
+              "and ma = {ma} " \
+              "order by the_date desc limit 1"
+        sql = sql.format(security_code=Utils.quotes_surround(security_code),
+                         the_date=Utils.quotes_surround(the_date.strftime('%Y-%m-%d')),
+                         ma=ma)
+        tuple_data = self.query(sql)
+        return tuple_data

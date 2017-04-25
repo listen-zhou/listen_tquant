@@ -35,26 +35,52 @@ class StockOneStopProcessor(Service):
     """
     均线数据涨跌幅均值数入库
     """
-    upsert_average_line_avg = 'insert into tquant_stock_average_line (security_code, the_date, ' \
-                  'ma, ' \
-                  'close_avg_chg_avg, ' \
-                  'amount_avg_chg_avg, ' \
-                  'vol_avg_chg_avg, ' \
-                  'price_avg_chg_avg, ' \
-                  'amount_flow_chg_avg, vol_flow_chg_avg) ' \
-                  'values ({security_code}, {the_date}, ' \
-                  '{ma}, ' \
-                  '{close_avg_chg_avg}, ' \
-                  '{amount_avg_chg_avg}, ' \
-                  '{vol_avg_chg_avg}, ' \
-                  '{price_avg_chg_avg}, ' \
-                  '{amount_flow_chg_avg}, {vol_flow_chg_avg}) ' \
-                  'on duplicate key update ' \
-                  'close_avg_chg_avg=values(close_avg_chg_avg), ' \
-                  'amount_avg_chg_avg=values(amount_avg_chg_avg), ' \
-                  'vol_avg_chg_avg=values(vol_avg_chg_avg), ' \
-                  'price_avg_chg_avg=values(price_avg_chg_avg), ' \
-                  'amount_flow_chg_avg=values(amount_flow_chg_avg), vol_flow_chg_avg=values(vol_flow_chg_avg) '
+    upsert_average_line_avg = 'insert into tquant_stock_average_line ' \
+                              '(' \
+                              'security_code, the_date, ma, ' \
+                              'close_avg_chg_avg, ' \
+                              'amount_avg_chg_avg, ' \
+                              'vol_avg_chg_avg, ' \
+                              'price_avg_chg_avg, ' \
+                              'amount_flow_chg_avg, ' \
+                              'vol_flow_chg_avg, ' \
+                              'close_avg_chg_avg_diff, ' \
+                              'amount_avg_chg_avg_diff, ' \
+                              'vol_avg_chg_avg_diff, ' \
+                              'price_avg_chg_avg_diff, ' \
+                              'amount_flow_chg_avg_diff, ' \
+                              'vol_flow_chg_avg_diff ' \
+                              ') ' \
+                              'values ' \
+                              '(' \
+                              '{security_code}, {the_date}, {ma}, ' \
+                              '{close_avg_chg_avg}, ' \
+                              '{amount_avg_chg_avg}, ' \
+                              '{vol_avg_chg_avg}, ' \
+                              '{price_avg_chg_avg}, ' \
+                              '{amount_flow_chg_avg}, ' \
+                              '{vol_flow_chg_avg}, ' \
+                              '{close_avg_chg_avg_diff}, ' \
+                              '{amount_avg_chg_avg_diff}, ' \
+                              '{vol_avg_chg_avg_diff}, ' \
+                              '{price_avg_chg_avg_diff}, ' \
+                              '{amount_flow_chg_avg_diff}, ' \
+                              '{vol_flow_chg_avg_diff}' \
+                              ') ' \
+                              'on duplicate key update ' \
+                              'close_avg_chg_avg=values(close_avg_chg_avg), ' \
+                              'amount_avg_chg_avg=values(amount_avg_chg_avg), ' \
+                              'vol_avg_chg_avg=values(vol_avg_chg_avg), ' \
+                              'price_avg_chg_avg=values(price_avg_chg_avg), ' \
+                              'amount_flow_chg_avg=values(amount_flow_chg_avg), ' \
+                              'vol_flow_chg_avg=values(vol_flow_chg_avg), ' \
+                              'close_avg_chg_avg_diff=values(close_avg_chg_avg_diff), ' \
+                              'amount_avg_chg_avg_diff=values(amount_avg_chg_avg_diff), ' \
+                              'vol_avg_chg_avg_diff=values(vol_avg_chg_avg_diff), ' \
+                              'price_avg_chg_avg_diff=values(price_avg_chg_avg_diff), ' \
+                              'amount_flow_chg_avg_diff=values(amount_flow_chg_avg_diff), ' \
+                              'vol_flow_chg_avg_diff=values(vol_flow_chg_avg_diff) ' \
+                              ''
     
     dbService = DbService()
 
@@ -664,12 +690,12 @@ class StockOneStopProcessor(Service):
         price_avg_chg = Utils.base_round_zero(Utils.division_zero((price_avg - price_pre_avg), price_pre_avg) * 100, 2)
 
         # 日金钱流向涨跌幅=日成交额/ma日(含)均成交额 * 100
-        amount_flow_chg = Utils.base_round_zero(Utils.division_zero(amount - amount_avg, amount_avg), 2)
+        amount_flow_chg = Utils.base_round_zero(Utils.division_zero(amount, amount_avg) * 100, 2)
         # if amount_flow_chg is None:
         #     amount_flow_chg = Decimal(0)
 
         # 日成交量流向涨跌幅=日成交量/ma日(含)均成交量 * 100
-        vol_flow_chg = Utils.base_round_zero(Utils.division_zero(vol - vol_avg, vol_avg), 2)
+        vol_flow_chg = Utils.base_round_zero(Utils.division_zero(vol, vol_avg) * 100, 2)
         # if vol_flow_chg is None:
         #     vol_flow_chg = Decimal(0)
 
@@ -715,6 +741,7 @@ class StockOneStopProcessor(Service):
                 process_line = '='
                 # 循环处理security_code的股票日K数据
                 i = 0
+                avg_pre_data = None
                 while i < len_result:
                     add_up += 1
                     # 如果切片的下标是元祖的最后一个元素，则退出，因为已经处理完毕
@@ -722,21 +749,49 @@ class StockOneStopProcessor(Service):
                         add_up -= 1
                         break
                     temp_line_tuple = result[i:(i + ma)]
+                    if avg_pre_data is None:
+                        the_date = temp_line_tuple[ma - 1][0]
+                        avg_pre_data = self.dbService.get_chg_avg_pre_data(self.security_code, the_date, ma)
+                        log_list = [self.now(), self.info(), self.get_classs_name(), self.security_code]
+                        log_list.append('the_date')
+                        log_list.append(the_date)
+                        log_list.append('ma')
+                        log_list.append(ma)
+                        log_list.append('avg_pre_data')
+                        log_list.append(avg_pre_data)
+                        log_list.append('temp_line_tuple[ma - 1]')
+                        log_list.append(temp_line_tuple[ma - 1])
+                        self.print_log(log_list)
+                        if avg_pre_data is not None :
+                            avg_pre_data = avg_pre_data[0]
 
                     # 返回值list_data list [the_date,
                     # close_avg_chg_avg, amount_avg_chg_avg, vol_avg_chg_avg,
                     # price_avg_chg_avg, amount_flow_chg_avg, vol_flow_chg_avg]
-                    list_data = self.analysis_average_line_avg(ma, temp_line_tuple)
-                    upsert_sql = self.upsert_average_line_avg.format(security_code=Utils.quotes_surround(self.security_code),
-                                                    the_date=Utils.quotes_surround(list_data[0].strftime('%Y-%m-%d')),
-                                                    ma=ma,
-                                                    close_avg_chg_avg=list_data[1],
-                                                    amount_avg_chg_avg=list_data[2],
-                                                    vol_avg_chg_avg=list_data[3],
-                                                    price_avg_chg_avg=list_data[4],
-                                                    amount_flow_chg_avg=list_data[5],
-                                                    vol_flow_chg_avg=list_data[6]
-                                                    )
+                    list_data = self.analysis_average_line_avg(ma, temp_line_tuple, avg_pre_data)
+                    upsert_sql = self.upsert_average_line_avg.format(
+                        security_code=Utils.quotes_surround(self.security_code),
+                        the_date=Utils.quotes_surround(list_data[0].strftime('%Y-%m-%d')),
+                        ma=ma,
+                        close_avg_chg_avg=list_data[1],
+                        amount_avg_chg_avg=list_data[2],
+                        vol_avg_chg_avg=list_data[3],
+                        price_avg_chg_avg=list_data[4],
+                        amount_flow_chg_avg=list_data[5],
+                        vol_flow_chg_avg=list_data[6],
+                        close_avg_chg_avg_diff=list_data[7],
+                        amount_avg_chg_avg_diff=list_data[8],
+                        vol_avg_chg_avg_diff=list_data[9],
+                        price_avg_chg_avg_diff=list_data[10],
+                        amount_flow_chg_avg_diff=list_data[11],
+                        vol_flow_chg_avg_diff=list_data[12],
+                    )
+                    avg_pre_data = [list_data[1], list_data[7],
+                                    list_data[2], list_data[8],
+                                    list_data[3], list_data[9],
+                                    list_data[4], list_data[10],
+                                    list_data[5], list_data[11],
+                                    list_data[6], list_data[12]]
                     # 批量(100)提交数据更新
                     if len(upsert_sql_list) == 200:
                         self.dbService.insert_many(upsert_sql_list)
@@ -790,7 +845,7 @@ class StockOneStopProcessor(Service):
             log_list.append(traceback.format_exc())
             self.print_log(log_list)
 
-    def analysis_average_line_avg(self, ma, temp_line_tuple):
+    def analysis_average_line_avg(self, ma, temp_line_tuple, avg_pre_data):
         """
         均线数据涨跌幅平均计算方法
         :param ma: 均线类型
@@ -801,37 +856,92 @@ class StockOneStopProcessor(Service):
         # vol_avg_chg, price_avg_chg, amount_flow_chg, vol_flow_chg
         # 当日the_date为正序排序最后一天的the_date，第一个元素
         the_date = temp_line_tuple[ma - 1][0]
+
+        close_avg_chg_avg_pre = None
+        close_avg_chg_avg_pre_diff = None
+        amount_avg_chg_avg_pre = None
+        amount_avg_chg_avg_pre_diff = None
+        vol_avg_chg_avg_pre = None
+        vol_avg_chg_avg_pre_diff = None
+        price_avg_chg_avg_pre = None
+        price_avg_chg_avg_pre_diff = None
+        amount_flow_chg_avg_pre = None
+        amount_flow_chg_avg_pre_diff = None
+        vol_flow_chg_avg_pre = None
+        vol_flow_chg_avg_pre_diff = None
+
+        if avg_pre_data is not None:
+            # print('the_date', the_date, 'avg_pre_data', avg_pre_data)
+            close_avg_chg_avg_pre = avg_pre_data[0]
+            close_avg_chg_avg_pre_diff = avg_pre_data[1]
+            amount_avg_chg_avg_pre = avg_pre_data[2]
+            amount_avg_chg_avg_pre_diff = avg_pre_data[3]
+            vol_avg_chg_avg_pre = avg_pre_data[4]
+            vol_avg_chg_avg_pre_diff = avg_pre_data[5]
+            price_avg_chg_avg_pre = avg_pre_data[6]
+            price_avg_chg_avg_pre_diff = avg_pre_data[7]
+            amount_flow_chg_avg_pre = avg_pre_data[8]
+            amount_flow_chg_avg_pre_diff = avg_pre_data[9]
+            vol_flow_chg_avg_pre = avg_pre_data[10]
+            vol_flow_chg_avg_pre_diff = avg_pre_data[11]
+
+
         # 将元组元素转换为列表元素
         # temp_items = [item for item in temp_line_tuple[0:]]
 
         # ma日均收盘价涨跌幅均=sum(前ma日(含)均收盘价涨跌幅)/ma
         close_avg_chg_list = [close_avg_chg for close_avg_chg in [item[1] for item in temp_line_tuple]]
         close_avg_chg_avg = Utils.base_round(Utils.average(close_avg_chg_list), 2)
+        close_avg_chg_avg_diff = 0
+        if close_avg_chg_avg_pre is not None:
+            close_avg_chg_avg_diff = close_avg_chg_avg - close_avg_chg_avg_pre
+            # close_avg_chg_avg_diff = close_avg_chg_avg_diff - close_avg_chg_avg_pre_diff
 
         # ma日均成交额涨跌幅均=sum(前ma日(含)均成交额涨跌幅)/ma
         amount_avg_chg_list = [amount_avg_chg for amount_avg_chg in [item[2] for item in temp_line_tuple]]
         amount_avg_chg_avg = Utils.base_round(Utils.average(amount_avg_chg_list), 2)
+        amount_avg_chg_avg_diff = 0
+        if amount_avg_chg_avg_pre is not None:
+            amount_avg_chg_avg_diff = amount_avg_chg_avg - amount_avg_chg_avg_pre
+            # amount_avg_chg_avg_diff = amount_avg_chg_avg_diff - amount_avg_chg_avg_pre_diff
 
         # ma日均成交量涨跌幅均=sum(前ma日(含)均成交量涨跌幅)/ma
         vol_avg_chg_list = [vol_avg_chg for vol_avg_chg in [item[3] for item in temp_line_tuple]]
         vol_avg_chg_avg = Utils.base_round(Utils.average(vol_avg_chg_list), 2)
+        vol_avg_chg_avg_diff = 0
+        if vol_avg_chg_avg_pre is not None:
+            vol_avg_chg_avg_diff = vol_avg_chg_avg - vol_avg_chg_avg_pre
+            # vol_avg_chg_avg_diff = vol_avg_chg_avg_diff - vol_avg_chg_avg_pre_diff
 
         # ma日均成交价涨跌幅均=sum(前ma日(含)均成交价涨跌幅)/ma
         price_avg_chg_list = [price_avg_chg for price_avg_chg in [item[4] for item in temp_line_tuple]]
         price_avg_chg_avg = Utils.base_round(Utils.average(price_avg_chg_list), 2)
+        price_avg_chg_avg_diff = 0
+        if price_avg_chg_avg_pre is not None:
+            price_avg_chg_avg_diff = price_avg_chg_avg - price_avg_chg_avg_pre
+            # price_avg_chg_avg_diff = price_avg_chg_avg_diff - price_avg_chg_avg_pre_diff
 
         # 日金钱流向涨跌幅均=sum(前ma日(含)金钱流向涨跌幅)/ma
         amount_flow_chg_list = [amount_flow_chg for amount_flow_chg in [item[5] for item in temp_line_tuple]]
         amount_flow_chg_avg = Utils.base_round(Utils.average(amount_flow_chg_list), 2)
+        amount_flow_chg_avg_diff = 0
+        if amount_flow_chg_avg_pre is not None:
+            amount_flow_chg_avg_diff = amount_flow_chg_avg - amount_flow_chg_avg_pre
+            # amount_flow_chg_avg_diff = amount_flow_chg_avg_diff - amount_flow_chg_avg_pre_diff
 
         # 日成交量流向涨跌幅均=sum(前ma日(含)成交量流向涨跌幅)/ma
         vol_flow_chg_list = [vol_flow_chg for vol_flow_chg in [item[5] for item in temp_line_tuple]]
         vol_flow_chg_avg = Utils.base_round(Utils.average(vol_flow_chg_list), 2)
-
+        vol_flow_chg_avg_diff = 0
+        if vol_flow_chg_avg_pre is not None:
+            vol_flow_chg_avg_diff = vol_flow_chg_avg - vol_flow_chg_avg_pre
+            # vol_flow_chg_avg_diff = vol_flow_chg_avg_diff - vol_flow_chg_avg_pre_diff
 
         return [the_date,
                 close_avg_chg_avg, amount_avg_chg_avg, vol_avg_chg_avg,
-                price_avg_chg_avg, amount_flow_chg_avg, vol_flow_chg_avg]
+                price_avg_chg_avg, amount_flow_chg_avg, vol_flow_chg_avg,
+                close_avg_chg_avg_diff, amount_avg_chg_avg_diff, vol_avg_chg_avg_diff,
+                price_avg_chg_avg_diff, amount_flow_chg_avg_diff, vol_flow_chg_avg_diff]
 
     def processing_real_time_kline(self):
         """
