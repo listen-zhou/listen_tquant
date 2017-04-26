@@ -336,6 +336,7 @@ class DbService(object):
             today = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
             max_the_date = datetime.datetime.now().replace(max_the_date.year, max_the_date.month, max_the_date.day, 0, 0, 0, 0)
             recentdays = (today - max_the_date).days
+            recentdays += 1
         # print('security_code', security_code, 'max_the_date', max_the_date, 'recentdays', recentdays)
         return recentdays
 
