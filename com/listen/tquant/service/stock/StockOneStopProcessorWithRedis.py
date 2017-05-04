@@ -217,6 +217,7 @@ class StockOneStopProcessor(Service):
         log_list.append(self.get_method_name())
         log_list.append('init...')
         self.print_log(log_list)
+        self.processing_deviated_chg()
         self.processing_day_kline_change_percent()
         if self.mas is not None and len(self.mas) > 0:
             for ma in self.mas:
@@ -1059,3 +1060,51 @@ class StockOneStopProcessor(Service):
                     close=close_last
                 )
                 self.dbService.insert(upsert_sql)
+
+    def processing_deviated_chg(self):
+        sql = "select id, security_code, the_date, open, high, low, close " \
+              "from tquant_stock_day_kline " \
+              "where security_code = {security_code} "
+        max_the_date = self.dbService.get_deviated_chg_max_the_date(self.security_code)
+
+        log_list = [self.now(), self.warn(), self.get_classs_name(), self.security_code]
+        log_list.append(self.get_method_name())
+        log_list.append('max_the_date')
+        log_list.append(max_the_date)
+        self.print_log(log_list)
+
+        if max_the_date is not None:
+            sql += "and the_date > {the_date} "
+            sql = sql.format(the_date=max_the_date.strftime('%Y-%m-%d'))
+        sql += "order by the_date asc "
+        sql = sql.format(security_code=Utils.quotes_surround(self.security_code))
+        result = self.dbService.query(sql)
+        if result is not None and len(result) > 0:
+            sql = "update tquant_stock_day_kline " \
+                  "set " \
+                  "open_low_chg = {open_low_chg}, " \
+                  "high_low_chg = {high_low_chg}, " \
+                  "high_close_chg = {high_close_chg}, " \
+                  "close_open_chg = {close_open_chg} " \
+                  "where id = {id} "
+            update_list = []
+            for item in result:
+                id = item[0]
+                open = item[3]
+                high = item[4]
+                low = item[5]
+                close = item[6]
+                open_low_chg = Utils.base_round(Utils.division_zero(open - low, low) * 100, 2)
+                high_low_chg = Utils.base_round(Utils.division_zero(high - low, low) * 100, 2)
+                high_close_chg = Utils.base_round(Utils.division_zero(high - close, close) * 100, 2)
+                close_open_chg = Utils.base_round(Utils.division_zero(close - open, open) * 100, 2)
+                update_list.append(sql.format(
+                    open_low_chg=open_low_chg,
+                    high_low_chg=high_low_chg,
+                    high_close_chg=high_close_chg,
+                    close_open_chg=close_open_chg,
+                    id=id
+                ))
+            return self.dbService.insert_many(update_list)
+        else:
+            return True

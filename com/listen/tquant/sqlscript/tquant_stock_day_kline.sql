@@ -26,3 +26,10 @@ COMMENT='股票日K数据'
 COLLATE='utf8_general_ci'
 ENGINE=InnoDB
 ;
+
+
+ALTER TABLE `tquant_stock_day_kline`
+	ADD COLUMN `open_low_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '开盘价与最低价偏离幅度' AFTER `open`,
+	ADD COLUMN `high_low_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '最高价与最低价偏离幅度' AFTER `low`,
+	ADD COLUMN `high_close_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '最高价与收盘价偏离幅度' AFTER `high_low_chg`,
+	ADD COLUMN `close_open_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '收盘价与开盘价偏离幅度' AFTER `close_chg`;

@@ -271,7 +271,7 @@ class DbService(object):
                   "order by the_date desc limit {ma} "
             sql = sql.format(security_code=Utils.quotes_surround(security_code),
                              average_line_max_the_date=Utils.quotes_surround(str(average_line_max_the_date)),
-                             ma=ma
+                             ma=ma + 2
                              )
             # print(sql)
             the_dates = self.query(sql)
@@ -318,7 +318,7 @@ class DbService(object):
                   "order by the_date desc limit {ma} "
             the_dates = self.query(sql.format(security_code=Utils.quotes_surround(security_code),
                                              average_line_max_the_date=Utils.quotes_surround(str(average_line_avg_max_the_date)),
-                                             ma=ma
+                                             ma=ma + 2
                                              )
                                   )
             if the_dates is not None and len(the_dates) > 0:
@@ -336,7 +336,7 @@ class DbService(object):
             today = datetime.datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
             max_the_date = datetime.datetime.now().replace(max_the_date.year, max_the_date.month, max_the_date.day, 0, 0, 0, 0)
             recentdays = (today - max_the_date).days
-            recentdays += 1
+            recentdays += 2
         # print('security_code', security_code, 'max_the_date', max_the_date, 'recentdays', recentdays)
         return recentdays
 
@@ -362,3 +362,19 @@ class DbService(object):
                          ma=ma)
         tuple_data = self.query(sql)
         return tuple_data
+
+    def get_deviated_chg_max_the_date(self, security_code):
+        sql = "select the_date from tquant_stock_day_kline " \
+              "where security_code = {security_code} " \
+              "and open_low_chg is not null " \
+              "and high_low_chg is not null " \
+              "and high_close_chg is not null " \
+              "and close_open_chg is not null " \
+              "order by the_date desc " \
+              "limit 1"
+        max_the_date = self.query(sql.format(security_code=Utils.quotes_surround(security_code)))
+        if max_the_date is not None and len(max_the_date) > 0:
+            # return max_the_date[0][0]
+            return None
+        else:
+            return None
