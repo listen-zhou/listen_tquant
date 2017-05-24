@@ -5,6 +5,9 @@ from decimal import Decimal
 from decimal import getcontext
 import copy
 
+import datetime
+
+
 class Utils():
 
     @staticmethod
@@ -20,6 +23,10 @@ class Utils():
             return message
         else:
             return None
+
+    @staticmethod
+    def print_log(list):
+        print(Utils.format_log_message(list))
 
     @staticmethod
     def quotes_surround(str):
@@ -95,4 +102,32 @@ class Utils():
     @staticmethod
     def deepcopy_list(list):
         return copy.deepcopy(list)
+
+    @staticmethod
+    def get_now():
+        return datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    @staticmethod
+    def get_info():
+        return 'INFO'
+
+    @staticmethod
+    def get_warn():
+        return 'WARN'
+
+    @staticmethod
+    def diff_days(date):
+        if isinstance(date, datetime.date):
+            date = datetime.datetime.now().replace(year=date.year, month=date.month, day=date.day)
+            today = datetime.datetime.now()
+            days = (today - date).days
+            if days is None :
+                return 0
+            return days
+        return None
+
+    @staticmethod
+    def format_date(date):
+        return date.strftime('%Y-%m-%d')
+
 
