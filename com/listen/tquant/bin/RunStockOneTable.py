@@ -18,8 +18,8 @@ if __name__ == '__main__':
 
         dbService = DbService()
         mas = [3, 5,10]
-        # securty_codes = dbService.get_worth_buying_stock()
-        securty_codes = (('000333', ), ('000651', ), ('600326', ), ('600722', ))
+        securty_codes = dbService.get_worth_buying_stock()
+        # securty_codes = (('000333', ), ('000651', ), ('600326', ), ('600722', ))
         print('cpu_count', cpu_count, 'security_codes len', len(securty_codes))
         if securty_codes is not None:
             securty_codes = [securty_codes[i][0] for i in range(len(securty_codes))]

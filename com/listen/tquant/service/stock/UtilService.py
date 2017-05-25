@@ -45,7 +45,12 @@ class UtilService():
             price_avg_chg = Utils.base_round(Utils.division_zero((price_avg - price_avg_pre), price_avg_pre) * 100, 2)
         else:
             price_avg_chg = 0
-        return {'vol_chg': vol_chg, 'close_chg': close_chg, 'price_avg': price_avg, 'price_avg_chg': price_avg_chg}
+        close_price_avg_chg = Utils.base_round_zero(Utils.division_zero(close2 - price_avg, price_avg) * 100, 2)
+        open2 = dict_item2['open']
+        close_open_chg = Utils.base_round_zero(Utils.division_zero(close2 - open2, open2) * 100, 2)
+        return {'vol_chg': vol_chg, 'close_chg': close_chg, 'price_avg': price_avg,
+                'price_avg_chg': price_avg_chg, 'close_price_avg_chg': close_price_avg_chg,
+                'close_open_chg': close_open_chg}
 
     @staticmethod
     def get_day_kline_chg_upsertsql(security_code, the_date, dict_data):
@@ -57,12 +62,15 @@ class UtilService():
         :return: 
         """
         sql = "update tquant_stock_history_quotation set vol_chg = {vol_chg}, " \
-              "close_chg = {close_chg}, price_avg = {price_avg}, price_avg_chg = {price_avg_chg} " \
+              "close_chg = {close_chg}, price_avg = {price_avg}, price_avg_chg = {price_avg_chg}, " \
+              "close_price_avg_chg = {close_price_avg_chg}, close_open_chg = {close_open_chg} " \
               "where security_code = {security_code} and the_date = {the_date} "
         sql = sql.format(vol_chg=dict_data['vol_chg'],
                          close_chg=dict_data['close_chg'],
                          price_avg=dict_data['price_avg'],
                          price_avg_chg=dict_data['price_avg_chg'],
+                         close_price_avg_chg=dict_data['close_price_avg_chg'],
+                         close_open_chg=dict_data['close_open_chg'],
                          security_code=Utils.quotes_surround(security_code),
                          the_date=Utils.quotes_surround(Utils.format_date(the_date)))
         return sql

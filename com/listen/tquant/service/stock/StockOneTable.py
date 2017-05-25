@@ -210,6 +210,61 @@ class StockOneTable():
             for ma in self.mas:
                 # 股票均线数据处理方法
                 self.processing_ma(ma)
+            self.processing_ma_10_diff()
+
+    def processing_ma_10_diff(self):
+        try:
+            ma = 10
+            if self.is_reset:
+                min_the_date = datetime.datetime.now().replace(year=1970, month=1, day=1)
+            else:
+                min_the_date = self.get_day_kline_ma_10_diff_maxthedate()
+            log_list = [Utils.get_now(), Utils.get_warn(), self.get_classs_name(), self.security_code,
+                        self.get_method_name(), 'ma', ma, 'MA10 diff最大交易日(前10日)', Utils.format_date(min_the_date)]
+            Utils.print_log(log_list)
+            result = self.get_all_day_kline(min_the_date)
+            if result is not None and len(result) > 0:
+                update_list = []
+                process_line = ''
+                add_up = ma - 1
+                dict_pre_data = None
+                for i in range(len(result)):
+                    if (i + ma) > len(result):
+                        break
+                    add_up += 1
+                    temp_data = result[i:i + ma]
+                    if dict_pre_data is None:
+                        dict_pre_data = self.get_pre_day_kline_ma_10_avg_chg_avg(temp_data[len(temp_data) - 1][0])
+                        if dict_pre_data is None:
+                            dict_pre_data = {'price_avg_chg_10_avg_pre': 0}
+                        print(self.security_code, ma, min_the_date, 'dict_pre_data', dict_pre_data)
+                    dict_data = self.get_calculate_ma_10_chg_diff(temp_data, dict_pre_data)
+                    dict_pre_data['price_avg_chg_10_avg_pre'] = dict_data['price_avg_chg_10_avg']
+                    the_date = temp_data[len(temp_data) - 1][0]
+                    update_sql = self.update_ma_10_chg_diff(dict_data, the_date)
+                    print(update_sql)
+                    update_list.append(update_sql)
+                    if len(update_list) == 200:
+                        self.dbService.insert_many(update_list)
+                        process_line += '='
+                        progress = Utils.base_round(Utils.division_zero(add_up, len(result)) * 100, 2)
+                        log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
+                                    self.get_method_name(), 'ma', ma, '处理进度', add_up, len(result), process_line,
+                                    str(progress) + '%']
+                        Utils.print_log(log_list)
+                        update_list = []
+                if len(update_list) > 0:
+                    self.dbService.insert_many(update_list)
+                process_line += '='
+                progress = Utils.base_round(Utils.division_zero(add_up, len(result)) * 100, 2)
+                log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
+                            self.get_method_name(),  'ma', ma, '处理进度', add_up, len(result), process_line,
+                            str(progress) + '%']
+                Utils.print_log(log_list)
+        except Exception:
+            log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
+                        self.get_method_name(), traceback.format_exc()]
+            Utils.print_log(log_list)
 
     def processing_ma(self, ma):
         # ma对应的字段名
@@ -237,13 +292,12 @@ class StockOneTable():
                     add_up += 1
                     temp_data = result[i:i + ma]
                     if dict_pre_data is None:
-                        dict_pre_data = self.get_pre_day_kline_ma(min_the_date, price_avg_ma, price_avg_chg_ma)
+                        dict_pre_data = self.get_pre_day_kline_ma(temp_data[len(temp_data)-1][0], price_avg_ma, price_avg_chg_ma)
                         if dict_pre_data is None:
-                            dict_pre_data = {'price_avg_ma_pre': 0, 'price_avg_chg_ma_pre': 0, 'price_avg_chg_10_chg_pre': 0}
+                            dict_pre_data = {'price_avg_ma_pre': 0, 'price_avg_chg_ma_pre': 0}
                     dict_data = self.get_calculate_ma_chg(temp_data, dict_pre_data)
                     dict_pre_data['price_avg_ma_pre'] = dict_data['price_avg_ma']
                     dict_pre_data['price_avg_chg_ma_pre'] = dict_data['price_avg_chg_ma']
-                    dict_pre_data['price_avg_chg_10_chg_pre'] = dict_data['price_avg_chg_ma_chg']
                     the_date = temp_data[len(temp_data) - 1][0]
                     update_sql = self.update_ma_chg(price_avg_ma, price_avg_chg_ma, dict_data, the_date)
                     update_list.append(update_sql)
@@ -276,12 +330,9 @@ class StockOneTable():
         if dict_data['money_flow'] is not None:
             sql += "money_flow = {money_flow}, "
             sql = sql.format(money_flow=dict_data['money_flow'])
-        if dict_data['price_avg_chg_ma_chg'] is not None:
-            sql += "price_avg_chg_10_chg = {price_avg_chg_ma_chg}, "
-            sql = sql.format(price_avg_chg_ma_chg=dict_data['price_avg_chg_ma_chg'])
-        if dict_data['price_avg_chg_10_chg_diff'] is not None:
-            sql += "price_avg_chg_10_chg_diff = {price_avg_chg_10_chg_diff}, "
-            sql = sql.format(price_avg_chg_10_chg_diff=dict_data['price_avg_chg_10_chg_diff'])
+        if dict_data['close_10_price_avg_chg'] is not None:
+            sql += "close_10_price_avg_chg = {close_10_price_avg_chg}, "
+            sql = sql.format(close_10_price_avg_chg=dict_data['close_10_price_avg_chg'])
         sql += price_avg_ma + " = {price_avg_ma}, "
         sql += price_avg_chg_ma + " = {price_avg_chg_ma} "
         sql += "where security_code = {security_code} and the_date = {the_date} "
@@ -293,10 +344,22 @@ class StockOneTable():
                          )
         return sql
 
+    def update_ma_10_chg_diff(self, dict_data, the_date):
+        sql = "update tquant_stock_history_quotation " \
+              "set price_avg_chg_10_avg = {price_avg_chg_10_avg}, " \
+              "price_avg_chg_10_avg_diff = {price_avg_chg_10_avg_diff} " \
+              "where security_code = {security_code} and the_date = {the_date} "
+        sql = sql.format(price_avg_chg_10_avg=dict_data['price_avg_chg_10_avg'],
+                         price_avg_chg_10_avg_diff=dict_data['price_avg_chg_10_avg_diff'],
+                         security_code=Utils.quotes_surround(self.security_code),
+                         the_date=Utils.quotes_surround(Utils.format_date(the_date))
+                         )
+        return sql
+
     def get_pre_day_kline_ma(self, the_date, price_avg_ma, price_avg_chg_ma):
         sql = "select " + price_avg_ma + ", " + price_avg_chg_ma \
-              + ", price_avg_chg_10_chg from tquant_stock_history_quotation " \
-              "where security_code = {security_code} and the_date <= {the_date} " \
+              + " from tquant_stock_history_quotation " \
+              "where security_code = {security_code} and the_date < {the_date} " \
               "order by the_date desc limit 1"
         sql = sql.format(security_code=Utils.quotes_surround(self.security_code),
                          the_date=Utils.quotes_surround(Utils.format_date(the_date)))
@@ -304,9 +367,19 @@ class StockOneTable():
         if result is not None and len(result) > 0:
             price_avg = result[0][0]
             price_avg_chg = result[0][1]
-            price_avg_chg_10_chg = result[0][2]
-            return {'price_avg_ma_pre': price_avg, 'price_avg_chg_ma_pre': price_avg_chg,
-                    'price_avg_chg_10_chg_pre': price_avg_chg_10_chg}
+            return {'price_avg_ma_pre': price_avg, 'price_avg_chg_ma_pre': price_avg_chg}
+        return None
+
+    def get_pre_day_kline_ma_10_avg_chg_avg(self, the_date):
+        sql = "select price_avg_chg_10_avg from tquant_stock_history_quotation " \
+              "where security_code = {security_code} and the_date < {the_date} " \
+              "order by the_date desc limit 1"
+        sql = sql.format(security_code=Utils.quotes_surround(self.security_code),
+                         the_date=Utils.quotes_surround(Utils.format_date(the_date)))
+        result = self.dbService.query(sql)
+        if result is not None and len(result) > 0:
+            price_avg_chg_10_avg = result[0][0]
+            return {'price_avg_chg_10_avg_pre': price_avg_chg_10_avg}
         return None
 
 
@@ -318,30 +391,45 @@ class StockOneTable():
               "and the_date >= {min_the_date} " \
               "order by the_date asc "
         """
-        if dict_pre_data is not None:
-            price_avg_ma_pre = dict_pre_data['price_avg_ma_pre']
-            price_avg_chg_ma_pre = dict_pre_data['price_avg_chg_ma_pre']
-            price_avg_chg_10_chg_pre = dict_pre_data['price_avg_chg_10_chg_pre']
-        else:
+        price_avg_ma_pre = dict_pre_data['price_avg_ma_pre']
+        price_avg_chg_ma_pre = dict_pre_data['price_avg_chg_ma_pre']
+
+        if price_avg_ma_pre is None:
             price_avg_ma_pre = 0
+        if price_avg_chg_ma_pre is None:
             price_avg_chg_ma_pre = 0
-            price_avg_chg_10_chg_pre = 0
         amount_list = [amount for amount in [item[1] for item in temp_data]]
         vol_list = [vol for vol in [item[2] for item in temp_data]]
         price_avg_ma = Utils.base_round_zero(Utils.division_zero(Utils.sum_zero(amount_list), Utils.sum_zero(vol_list)), 2)
         price_avg_chg_ma = Utils.base_round_zero(Utils.division_zero((price_avg_ma - price_avg_ma_pre), price_avg_ma_pre) * 100, 2)
         amount = temp_data[len(temp_data) - 1][1]
         money_flow = None
-        price_avg_chg_ma_chg = None
-        price_avg_chg_10_chg_diff = None
+        close_10_price_avg_chg = None
         if len(temp_data) == 10:
             amount_avg = Utils.base_round(Utils.division_zero(Utils.sum_zero(amount_list), 10), 2)
-            money_flow = Utils.base_round(Utils.division_zero(amount, amount_avg), 2)
-            price_avg_chg_ma_chg = Utils.base_round_zero(Utils.division_zero(price_avg_chg_ma - price_avg_chg_ma_pre, price_avg_chg_ma_pre) * 100, 2)
-            price_avg_chg_10_chg_diff = price_avg_chg_ma_chg - price_avg_chg_10_chg_pre
+            money_flow = Utils.base_round(Utils.division_zero(amount, amount_avg) * 100, 2)
+            close = temp_data[len(temp_data)-1][6]
+            close_10_price_avg_chg = Utils.base_round_zero(Utils.division_zero(close - price_avg_ma, price_avg_ma) * 100, 2)
         return {'price_avg_ma': price_avg_ma, 'price_avg_chg_ma': price_avg_chg_ma,
-                'money_flow': money_flow, 'price_avg_chg_ma_chg': price_avg_chg_ma_chg,
-                'price_avg_chg_10_chg_diff': price_avg_chg_10_chg_diff}
+                'money_flow': money_flow, 'close_10_price_avg_chg': close_10_price_avg_chg}
+
+    def get_calculate_ma_10_chg_diff(self, temp_data, dict_pre_data):
+        """
+        sql = "select the_date, amount, vol, open, high, low, close, price_avg_chg_10 " \
+              "from tquant_stock_history_quotation " \
+              "where security_code = {security_code} " \
+              "and the_date >= {min_the_date} " \
+              "order by the_date asc "
+        """
+        price_avg_chg_10_avg_pre = dict_pre_data['price_avg_chg_10_avg_pre']
+
+        if price_avg_chg_10_avg_pre is None:
+            price_avg_chg_10_avg_pre = 0
+        price_avg_chg_10_list = [price_avg_chg_10 for price_avg_chg_10 in [item[7] for item in temp_data]]
+        price_avg_chg_10_avg = Utils.base_round_zero(Utils.division_zero(Utils.sum_zero(price_avg_chg_10_list), len(temp_data)), 2)
+        price_avg_chg_10_avg_diff = price_avg_chg_10_avg - price_avg_chg_10_avg_pre
+
+        return {'price_avg_chg_10_avg': price_avg_chg_10_avg, 'price_avg_chg_10_avg_diff': price_avg_chg_10_avg_diff}
 
     def get_day_kline_ma_maxthedate(self, price_avg_ma, ma):
         sql = "select the_date from tquant_stock_history_quotation " \
@@ -351,6 +439,17 @@ class StockOneTable():
         the_dates = self.dbService.query(sql.format(security_code=Utils.quotes_surround(self.security_code), ma=ma))
         if the_dates is not None and len(the_dates) > 0:
             the_date = the_dates[len(the_dates) - 1][0]
+            return the_date
+        return None
+
+    def get_day_kline_ma_10_diff_maxthedate(self):
+        sql = "select the_date from tquant_stock_history_quotation " \
+              "where security_code = {security_code} " \
+              "and price_avg_chg_10_avg is not null " \
+              "order by the_date desc limit 10 "
+        the_dates = self.dbService.query(sql.format(security_code=Utils.quotes_surround(self.security_code)))
+        if the_dates is not None and len(the_dates) > 0:
+            the_date = the_dates[len(the_dates)-1][0]
             return the_date
         return None
 
@@ -517,8 +616,8 @@ class StockOneTable():
                     if i == len(result) - 1:
                         break
                     the_date = result[i+1][0]
-                    dict_item1 = {'vol': result[i][2], 'close': result[i][6], 'amount': result[i][1]}
-                    dict_item2 = {'vol': result[i+1][2], 'close': result[i+1][6], 'amount': result[i+1][1]}
+                    dict_item1 = {'vol': result[i][2], 'close': result[i][6], 'amount': result[i][1], 'open': result[i][3]}
+                    dict_item2 = {'vol': result[i+1][2], 'close': result[i+1][6], 'amount': result[i+1][1], 'open': result[i+1][3]}
                     if dict_pre_data is None:
                         dict_pre_data = self.get_pre_day_kline(the_date)
                         if dict_pre_data is None:
@@ -576,7 +675,8 @@ class StockOneTable():
     def get_all_day_kline(self, min_the_date):
         if min_the_date is None:
             min_the_date = datetime.datetime.now().replace(year=1970, month=1, day=1)
-        sql = "select the_date, amount, vol, open, high, low, close " \
+        sql = "select the_date, amount, vol, open, high, low, close, " \
+              "price_avg_chg_10 " \
               "from tquant_stock_history_quotation " \
               "where security_code = {security_code} " \
               "and the_date >= {min_the_date} " \
