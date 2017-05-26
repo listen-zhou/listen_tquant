@@ -18,6 +18,8 @@ if __name__ == '__main__':
         pool = multiprocessing.Pool(processes=4)
 
         dbService = DbService()
+        sql = "truncate table tquant_process_progress_info"
+        dbService.query(sql)
         mas = [3, 5,10]
         securty_codes = dbService.get_worth_buying_stock()
         # securty_codes = (('000333', ), ('000651', ), ('600326', ), ('600722', ))
