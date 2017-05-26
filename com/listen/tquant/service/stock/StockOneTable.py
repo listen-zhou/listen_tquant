@@ -23,9 +23,10 @@ class StockOneTable():
     def get_method_name(self):
         return inspect.stack()[1][3]
 
-    def __init__(self, security_code, is_reset):
+    def __init__(self, security_code, is_reset, flag):
         self.security_code = security_code
         self.is_reset = is_reset
+        self.flag = flag
         self.mas = [3, 5, 10]
         log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
                     self.get_method_name(), 'mas', self.mas]
@@ -42,13 +43,23 @@ class StockOneTable():
         # 股票日K数据处理方法
         self.processing_day_kline()
         # 股票日K数据处理后有关计算的方法
-        self.is_reset = True
+        self.is_reset = False
         self.procesing_day_kline_after()
         self.is_reset = False
         # self.processing_real_time_kline()
+        self.complete_record()
 
         log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
                     self.get_method_name(), self.security_code + '【【end】】']
+        Utils.print_log(log_list)
+
+    def complete_record(self):
+        sql = "insert into tquant_process_progress_info (flag, security_code) " \
+              "values ({flag}, {security_code}) "
+        sql = sql.format(flag=Utils.quotes_surround(self.flag), security_code=Utils.quotes_surround(self.security_code))
+        self.dbService.insert(sql)
+        log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
+                    self.get_method_name(), 'flag', self.flag, self.security_code + '【【complete】】']
         Utils.print_log(log_list)
 
     #################################################################################################
@@ -242,12 +253,10 @@ class StockOneTable():
                         dict_pre_data = self.get_pre_day_kline_ma_10_avg_chg_avg(temp_data[len(temp_data) - 1][0])
                         if dict_pre_data is None:
                             dict_pre_data = {'price_avg_chg_10_avg_pre': 0}
-                        print(self.security_code, ma, min_the_date, 'dict_pre_data', dict_pre_data)
                     dict_data = self.get_calculate_ma_10_chg_diff(temp_data, dict_pre_data)
                     dict_pre_data['price_avg_chg_10_avg_pre'] = dict_data['price_avg_chg_10_avg']
                     the_date = temp_data[len(temp_data) - 1][0]
                     update_sql = self.update_ma_10_chg_diff(dict_data, the_date)
-                    print(update_sql)
                     update_list.append(update_sql)
                     if len(update_list) == 200:
                         self.dbService.insert_many(update_list)
