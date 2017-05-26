@@ -128,6 +128,9 @@ class Utils():
 
     @staticmethod
     def format_date(date):
-        return date.strftime('%Y-%m-%d')
+        if date is not None:
+            return date.strftime('%Y-%m-%d')
+        else:
+            return date
 
 
