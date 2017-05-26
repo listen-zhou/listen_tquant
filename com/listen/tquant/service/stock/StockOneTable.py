@@ -33,7 +33,7 @@ class StockOneTable():
 
     def processing_single_security_code(self):
         log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
-                    self.get_method_name()]
+                    self.get_method_name(), self.security_code + '【【start】】']
         Utils.print_log(log_list)
         """
         单只股票处理方法
@@ -45,7 +45,11 @@ class StockOneTable():
         self.is_reset = True
         self.procesing_day_kline_after()
         self.is_reset = False
-        self.processing_real_time_kline()
+        # self.processing_real_time_kline()
+
+        log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
+                    self.get_method_name(), self.security_code + '【【end】】']
+        Utils.print_log(log_list)
 
     #################################################################################################
 
@@ -687,34 +691,3 @@ class StockOneTable():
         result = self.dbService.query(sql)
         return result
         # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-
-
-    def data_transport(self, start, size):
-        sql = "select security_code, the_date, amount, vol, open, high, low, close " \
-              "from tquant_stock_day_kline order by id asc limit {start}, {size}"
-        sql = sql.format(start=start, size=size)
-        result = self.dbService.query(sql)
-        if result is not None and len(result) > 0:
-            update_list =[]
-            for i in range(len(result)):
-                update_sql = "insert into tquant_stock_history_quotation " \
-                             "(security_code, the_date, amount, vol, open, high, low, close) " \
-                             "values ({security_code}, {the_date}, {amount}, {vol}, {open}, {high}, {low}, {close}) "
-                update_sql = update_sql.format(security_code=Utils.quotes_surround(result[i][0]),
-                                               the_date=Utils.quotes_surround(Utils.format_date(result[i][1])),
-                                               amount=result[i][2],
-                                               vol=result[i][3],
-                                               open=result[i][4],
-                                               high=result[i][5],
-                                               low=result[i][6],
-                                               close=result[i][7]
-                                               )
-                update_list.append(update_sql)
-            self.dbService.insert_many(update_list)
-            start += len(result)
-            print('trans size', start)
-            time.sleep(30)
-            self.data_transport(start, size)
-        else:
-            print('data transport done')
-            return
