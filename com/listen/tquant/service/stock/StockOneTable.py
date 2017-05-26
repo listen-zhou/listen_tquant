@@ -46,7 +46,7 @@ class StockOneTable():
         self.is_reset = False
         self.procesing_day_kline_after()
         self.is_reset = False
-        # self.processing_real_time_kline()
+        self.processing_real_time_kline()
         self.complete_record()
 
         log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
