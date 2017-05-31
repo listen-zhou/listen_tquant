@@ -480,8 +480,8 @@ class StockOneTable():
                         self.get_method_name(), '当日全部5分钟实时行情 开始时间', start_date, '拉取时间', current_date,
                         '结束时间', end_date]
             Utils.print_log(log_list)
-            # if current_date <= end_date and current_date >= start_date:
-            if True:
+            if current_date <= end_date and current_date >= start_date:
+            # if True:
                 # 5分钟K的实时行情
                 day_kline = tt.get_stock_bar(self.security_code, 1)
                 # print('day_kline', day_kline)
