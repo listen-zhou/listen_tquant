@@ -476,12 +476,12 @@ class StockOneTable():
             current_date = datetime.datetime.now().replace(microsecond=0)
             start_date = current_date.replace(hour=9, minute=30, second=0, microsecond=0)
             end_date = current_date.replace(hour=15, minute=0, second=0, microsecond=0)
-            log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
-                        self.get_method_name(), '当日全部5分钟实时行情 开始时间', start_date, '拉取时间', current_date,
-                        '结束时间', end_date]
-            Utils.print_log(log_list)
             if current_date <= end_date and current_date >= start_date:
-            # if True:
+                log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
+                            self.get_method_name(), '当日全部5分钟实时行情 开始时间', start_date, '拉取时间', current_date,
+                            '结束时间', end_date]
+                Utils.print_log(log_list)
+                # if True:
                 # 5分钟K的实时行情
                 day_kline = tt.get_stock_bar(self.security_code, 1)
                 # print('day_kline', day_kline)
@@ -489,6 +489,11 @@ class StockOneTable():
                 self.analysis_real_time_kline(day_kline, start_date)
                 # 股票日K涨跌幅处理方法
                 self.procesing_day_kline_after()
+            else:
+                log_list = [Utils.get_now(), Utils.get_warn(), self.get_classs_name(), self.security_code,
+                            self.get_method_name(), '当日全部5分钟实时行情 开始时间', start_date, '拉取时间', current_date,
+                            '结束时间', end_date, '【交易结束或不在交易时间段内】']
+                Utils.print_log(log_list)
         except Exception:
             log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
                         self.get_method_name(), traceback.format_exc()]
