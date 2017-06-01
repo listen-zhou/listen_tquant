@@ -23,7 +23,7 @@ if __name__ == '__main__':
         dbService.query(sql)
         mas = [3, 5,10]
         securty_codes = dbService.get_worth_buying_stock()
-        # securty_codes = (('000333', ), ('000651', ), ('600326', ), ('600722', ))
+        # securty_codes = (('002415', ), )
         flag += Utils.get_now()
         print('flag', flag)
         print('cpu_count', cpu_count, 'security_codes len', len(securty_codes))

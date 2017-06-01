@@ -234,7 +234,7 @@ class StockOneTable():
             if self.is_reset:
                 min_the_date = datetime.datetime.now().replace(year=1970, month=1, day=1)
             else:
-                min_the_date = self.get_day_kline_ma_10_diff_maxthedate()
+                min_the_date = self.get_day_kline_ma_10_diff_maxthedate(ma)
             log_list = [Utils.get_now(), Utils.get_warn(), self.get_classs_name(), self.security_code,
                         self.get_method_name(), 'ma', ma, 'MA10 diff最大交易日(前10日)', Utils.format_date(min_the_date)]
             Utils.print_log(log_list)
@@ -446,6 +446,7 @@ class StockOneTable():
         return {'price_avg_chg_10_avg': price_avg_chg_10_avg, 'price_avg_chg_10_avg_diff': price_avg_chg_10_avg_diff}
 
     def get_day_kline_ma_maxthedate(self, price_avg_ma, ma):
+        ma += 7
         sql = "select the_date from tquant_stock_history_quotation " \
               "where security_code = {security_code} " \
               "and " + price_avg_ma + " is not null " \
@@ -456,12 +457,13 @@ class StockOneTable():
             return the_date
         return None
 
-    def get_day_kline_ma_10_diff_maxthedate(self):
+    def get_day_kline_ma_10_diff_maxthedate(self, ma):
+        ma += 7
         sql = "select the_date from tquant_stock_history_quotation " \
               "where security_code = {security_code} " \
               "and price_avg_chg_10_avg is not null " \
-              "order by the_date desc limit 10 "
-        the_dates = self.dbService.query(sql.format(security_code=Utils.quotes_surround(self.security_code)))
+              "order by the_date desc limit {ma} "
+        the_dates = self.dbService.query(sql.format(security_code=Utils.quotes_surround(self.security_code), ma=ma))
         if the_dates is not None and len(the_dates) > 0:
             the_date = the_dates[len(the_dates)-1][0]
             return the_date
@@ -684,7 +686,7 @@ class StockOneTable():
         sql = "select the_date from tquant_stock_history_quotation " \
               "where security_code = {security_code} " \
               "and close_chg is not null " \
-              "order by the_date desc limit 2"
+              "order by the_date desc limit 7"
         the_dates = self.dbService.query(sql.format(security_code=Utils.quotes_surround(self.security_code)))
         if the_dates is not None and len(the_dates) > 0:
             the_date = the_dates[len(the_dates) - 1][0]
