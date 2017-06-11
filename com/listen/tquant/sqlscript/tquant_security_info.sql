@@ -14,3 +14,5 @@ COMMENT='证券基本信息表'
 COLLATE='utf8_general_ci'
 ENGINE=InnoDB
 ;
+ALTER TABLE `tquant_security_info`
+	ADD COLUMN `sumilated_stock_condition` VARCHAR(2000) NULL DEFAULT NULL COMMENT '模拟炒股条件json字符串' AFTER `worth_buying`;
