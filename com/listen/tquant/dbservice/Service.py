@@ -343,7 +343,7 @@ class DbService(object):
     def get_worth_buying_stock(self):
         sql = "select security_code, exchange_code, security_name, worth_buying " \
               "from tquant_security_info " \
-              "where worth_buying = 1 " \
+              "where security_code not like '3%' " \
               "order by security_code asc "
         return self.query(sql)
 
