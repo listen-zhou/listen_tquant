@@ -49,6 +49,53 @@ class DbService(object):
             print('error sql:', upsert_sql)
             traceback.print_exc()
 
+    def check_exist_id(self, dict_data, table_name, list_unique_fields):
+        check_sql = "select id from " + table_name + " where "
+        where_sql = ""
+        for field_name in list_unique_fields:
+            where_sql += field_name + " = " + dict_data[field_name] + " and "
+        ids = self.query(check_sql + where_sql[0:len(where_sql) - 4])
+        if ids is not None and len(ids) > 0:
+            id = ids[0][0]
+            return id
+        return 0
+
+    def upsert(self, dict_data, table_name, list_unique_fields):
+        id = self.check_exist_id(dict_data, table_name, list_unique_fields)
+        if id is not None and id > 0:
+            # update
+            sql = "update " + table_name + " set"
+            for field_name in dict_data.keys():
+                sql += " " + field_name + " = {" + field_name + "},"
+            sql = sql[0:len(sql) - 1]
+            sql += " where id = " + str(id)
+        else:
+            # insert
+            sql = "insert into " + table_name + " ("
+            field_names_sql = ""
+            field_values_sql = ""
+            for field_name in dict_data.keys():
+                field_names_sql += " " + field_name + ","
+                field_values_sql += " {" + field_name + "},"
+            field_names_sql = field_names_sql[0:len(field_names_sql) - 1]
+            field_values_sql = field_values_sql[0:len(field_values_sql) - 1]
+            sql += field_names_sql
+            sql += ") values ("
+            sql += field_values_sql + ")"
+        sql = sql.format_map(dict_data)
+        self.cursor.execute(sql)
+
+    def upsert_many(self, list_dict_data, table_name, list_unique_fields):
+        sql = ""
+        try:
+            for dict_data in list_dict_data:
+                self.upsert(dict_data, table_name, list_unique_fields)
+        except Exception:
+            print('error sql', sql)
+            self.conn.rollback()
+            traceback.print_exc()
+
+
     # noinspection SpellCheckingInspection,PyBroadException
     def insert_many(self, upsert_sql_list):
         try:

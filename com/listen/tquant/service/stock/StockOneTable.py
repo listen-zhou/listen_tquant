@@ -23,13 +23,11 @@ class StockOneTable():
     def get_method_name(self):
         return inspect.stack()[1][3]
 
-    def __init__(self, security_code, is_reset, flag):
+    def __init__(self, security_code, is_reset):
         self.security_code = security_code
         self.is_reset = is_reset
-        self.flag = flag
-        self.mas = [3, 5, 10]
         log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
-                    self.get_method_name(), 'mas', self.mas]
+                    self.get_method_name()]
         Utils.print_log(log_list)
 
     def processing_single_security_code(self):
@@ -42,27 +40,254 @@ class StockOneTable():
         """
         # 股票日K数据处理方法
         self.processing_day_kline()
-        # 股票日K数据处理后有关计算的方法
-        self.is_reset = False
-        self.procesing_day_kline_after()
-        self.is_reset = False
-        self.processing_real_time_kline()
-        self.complete_record()
+        # self.processing_real_time_kline()
 
         log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
                     self.get_method_name(), self.security_code + '【【end】】']
         Utils.print_log(log_list)
 
-    def complete_record(self):
-        sql = "insert into tquant_process_progress_info (flag, security_code) " \
-              "values ({flag}, {security_code}) "
-        sql = sql.format(flag=Utils.quotes_surround(self.flag), security_code=Utils.quotes_surround(self.security_code))
-        self.dbService.insert(sql)
-        log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
-                    self.get_method_name(), 'flag', self.flag, self.security_code + '【【complete】】']
-        Utils.print_log(log_list)
+    def processing_section(self, section, dict_data_pre):
+        """
+        处理切片，分3、5、10等切片数据
+        tquant_stock_history_quotation
+            `security_code` VARCHAR(20) NOT NULL COMMENT '股票代码',
+            `the_date` DATE NOT NULL COMMENT '交易日',
+            `close` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '收盘价',
+            `close_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '收盘价幅',
+            `close_open_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '收盘价与开盘价幅',
+            `open` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '开盘价',
+            `open_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '开盘价幅',
+            `high` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '最高价',
+            `high_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '最高价幅',
+            `low` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '最低价',
+            `low_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '最低价幅',
+            `amount` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '交易额(元)',
+            `amount_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '交易额幅',
+            `vol` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '交易量(手)',
+            `vol_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '交易量幅',
+            `week_day` INT(11) NULL DEFAULT NULL COMMENT '周几',
+            `price_avg_1` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '日均价',
+            `price_avg_1_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '日均价涨跌幅',
+            `price_avg_1_chg_diff` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '日均价涨跌幅差',
+            `close_price_avg_1_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '收盘与日均价幅',
+            `price_avg_3` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '3日均价',
+            `price_avg_3_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '3日均价涨跌幅',
+            `price_avg_3_chg_diff` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '3日均价涨跌幅差',
+            `close_price_avg_3_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '收盘与3日均价幅',
+            `price_avg_5` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '5日均价',
+            `price_avg_5_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '5日均价涨跌幅',
+            `price_avg_5_chg_diff` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '5日均价涨跌幅差',
+            `close_price_avg_5_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '收盘与5日均价幅',
+            `price_avg_10` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '10日均价',
+            `price_avg_10_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '10日均价涨跌幅',
+            `price_avg_10_chg_diff` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '10日均价涨跌幅差',
+            `close_price_avg_10_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '收盘与10日均价幅',
+        :param section:
+                        DataFrame切片数据
+                        example         amount  close  code  high   low  open        vol
+                        date
+                        1991-11-29     8557000   0.11     1  0.13  0.11  0.13     306200
+                        1991-11-30     3962000   0.11     1  0.11  0.11  0.11     142900
+                        1991-12-02    11099000   0.10     1  0.11  0.10  0.11     410500
+                        1991-12-03     6521000   0.12     1  0.12  0.10  0.10     234800
+                        1991-12-04     6853000   0.11     1  0.12  0.11  0.12     242700
+                        1991-12-05     3458000   0.10     1  0.11  0.10  0.11     126000
+                        1991-12-06     4341000   0.11     1  0.11  0.10  0.10     159400
+                        1991-12-07     2218000   0.11     1  0.11  0.11  0.11      80600
+        :param dict_data_pre:
+                        前一交易日数据 格式类似本次返回的数据
+        :return:
+        """
+        dict_data = {'security_code': Utils.quotes_surround(self.security_code)}
+        # 日涨跌幅计算
+        section_tail1 = section.tail(1)
+        idx = section_tail1.index.values[0]
+        the_date = idx.astype('M8[ms]').astype('O')
+        week_day = Utils.format_week_day(the_date)
+        dict_data['week_day'] = week_day
+        the_date = Utils.format_date(the_date)
+        dict_data['the_date'] = Utils.quotes_surround(the_date)
+        if dict_data_pre is None:
+            print('第一次dict_data_pre为None')
+            # 转换时间格式，结果为<class 'datetime.datetime'> 1991-11-29 00:00:00
+            dict_data_pre = self.get_dict_data_pre(the_date)
+            if dict_data_pre is None:
+                print('查询后dict_data_pre还是为None，只能创建为0的数据')
+                dict_data_pre = self.create_blank_dict_data()
+        self.processing_1_day_chg(section_tail1, idx, dict_data, dict_data_pre)
+        for days in [1, 3, 5, 10]:
+            self.processing_avg(section.tail(days), days, dict_data, dict_data_pre)
+        return dict_data
 
+    def get_dict_data_pre(self, the_date):
+        sql = "select close, open, high, low, amount, vol, " \
+              "price_avg_1, price_avg_1_chg, price_avg_3, price_avg_3_chg, " \
+              "price_avg_5, price_avg_5_chg, price_avg_10, price_avg_10_chg " \
+              "from tquant_stock_history_quotation " \
+              "where security_code = {security_code} and the_date < {the_date} " \
+              "order by the_date desc limit 1"
+        sql = sql.format(security_code=self.security_code, the_date=Utils.quotes_surround(the_date))
+        tuple_datas = self.dbService.query(sql)
+        if tuple_datas is not None and len(tuple_datas) > 0:
+            tuple_data = tuple_datas[0]
+            if tuple_data is not None and len(tuple_data) > 0:
+                if tuple_data[0] is None:
+                    return None
+                else:
+                    dict_data = {}
+                    dict_data['close'] = tuple_data[0]
+                    dict_data['open'] = tuple_data[1]
+                    dict_data['high'] = tuple_data[2]
+                    dict_data['low'] = tuple_data[3]
+                    dict_data['amount'] = tuple_data[4]
+                    dict_data['vol'] = tuple_data[5]
+                    dict_data['price_avg_1'] = tuple_data[6]
+                    dict_data['price_avg_1_chg'] = tuple_data[7]
+                    dict_data['price_avg_3'] = tuple_data[8]
+                    dict_data['price_avg_3_chg'] = tuple_data[9]
+                    dict_data['price_avg_5'] = tuple_data[10]
+                    dict_data['price_avg_5_chg'] = tuple_data[11]
+                    dict_data['price_avg_10'] = tuple_data[12]
+                    dict_data['price_avg_10_chg'] = tuple_data[13]
+                    return dict_data
+            else:
+                return None
+        else:
+            return None
+
+    def create_blank_dict_data(self):
+        dict_data = {}
+        dict_data['close'] = 0
+        dict_data['open'] = 0
+        dict_data['high'] = 0
+        dict_data['low'] = 0
+        dict_data['amount'] = 0
+        dict_data['vol'] = 0
+        dict_data['price_avg_1'] = 0
+        dict_data['price_avg_1_chg'] = 0
+        dict_data['price_avg_3'] = 0
+        dict_data['price_avg_3_chg'] = 0
+        dict_data['price_avg_5'] = 0
+        dict_data['price_avg_5_chg'] = 0
+        dict_data['price_avg_10'] = 0
+        dict_data['price_avg_10_chg'] = 0
+        return dict_data
+
+    def processing_avg(self, section_tail, days, dict_data, dict_data_pre):
+        """
+        section_tail.describe()结果示例 <class 'pandas.core.frame.DataFrame'>
+                     amount        close  code         high          low         open            vol
+        count  6.067000e+03  6067.000000  6067  6067.000000  6067.000000  6067.000000   6.067000e+03
+        max    8.596942e+09    14.280000     1    14.460000    13.870000    14.460000   5.086050e+08
+        :param section_tail:
+        :param days:
+        :param dict_data:
+        :param dict_data_pre:
+        :return:
+        """
+        try:
+            # print(days, section_tail)
+            section_describe = section_tail.sum()
+
+            amount_count = section_describe['amount']
+            vol_count = section_describe['vol']
+
+            price_avg_ = "price_avg_"
+            _chg = "_chg"
+            _chg_diff = "_chg_diff"
+            close_price_avg_ = "close_price_avg_"
+
+            days = str(days)
+            price_avg = Utils.base_round_zero(Utils.division_zero(amount_count, vol_count), 2)
+            dict_data[price_avg_ + days] = price_avg
+            price_avg_pre = dict_data_pre[price_avg_ + days]
+            price_avg_chg = Utils.base_round_zero(Utils.division_zero(price_avg - price_avg_pre, price_avg_pre) * 100, 2)
+            dict_data[price_avg_ + days + _chg] = price_avg_chg
+
+            price_avg_chg_pre = dict_data_pre[price_avg_ + days + _chg]
+            price_avg_chg_diff = price_avg_chg - price_avg_chg_pre
+            dict_data[price_avg_ + days + _chg_diff] = price_avg_chg_diff
+
+            close = dict_data['close']
+            close_price_avg_chg = Utils.base_round_zero(Utils.division_zero(close - price_avg, price_avg) * 100, 2)
+            dict_data[close_price_avg_ + days + _chg] = close_price_avg_chg
+        except Exception:
+            traceback.print_exc()
+
+    def processing_1_day_chg(self, section_tail1, idx, dict_data, dict_data_pre):
+        try:
+            amount = section_tail1.at[idx, 'amount']
+            # amount的类型为numpy.ndarray，是一个多维数组，可能包含多个值，其他的字段也是一样，测试的时候发现有异常抛出
+            if isinstance(amount, numpy.ndarray) and amount.size > 1:
+                amount = amount.tolist()[0]
+            amount = Utils.base_round(amount, 2)
+            amount_pre = dict_data_pre['amount']
+            amount_chg = Utils.base_round_zero(Utils.division_zero(amount - amount_pre, amount_pre) * 100, 2)
+            dict_data['amount'] = amount
+            dict_data['amount_chg'] = amount_chg
+
+            vol = section_tail1.at[idx, 'vol']
+            if isinstance(vol, numpy.ndarray) and vol.size > 1:
+                vol = vol.tolist()[0]
+            vol = Utils.base_round(vol, 2)
+            vol_pre = dict_data_pre['vol']
+            vol_chg = Utils.base_round_zero(Utils.division_zero(vol - vol_pre, vol_pre) * 100, 2)
+            dict_data['vol'] = vol
+            dict_data['vol_chg'] = vol_chg
+
+            open = section_tail1.at[idx, 'open']
+            if isinstance(open, numpy.ndarray) and open.size > 1:
+                open = open.tolist()[0]
+            open = Utils.base_round(open, 2)
+            open_pre = dict_data_pre['open']
+            open_chg = Utils.base_round_zero(Utils.division_zero(open - open_pre, open_pre) * 100, 2)
+            dict_data['open'] = open
+            dict_data['open_chg'] = open_chg
+
+            high = section_tail1.at[idx, 'high']
+            if isinstance(high, numpy.ndarray) and high.size > 1:
+                high = high.tolist()[0]
+            high = Utils.base_round(high, 2)
+            high_pre = dict_data_pre['high']
+            high_chg = Utils.base_round_zero(Utils.division_zero(high - high_pre, high_pre) * 100, 2)
+            dict_data['high'] = high
+            dict_data['high_chg'] = high_chg
+
+            low = section_tail1.at[idx, 'low']
+            if isinstance(low, numpy.ndarray) and low.size > 1:
+                low = low.tolist()[0]
+            low = Utils.base_round(low, 2)
+            low_pre = dict_data_pre['low']
+            low_chg = Utils.base_round_zero(Utils.division_zero(low - low_pre, low_pre) * 100, 2)
+            dict_data['low'] = low
+            dict_data['low_chg'] = low_chg
+
+            close = section_tail1.at[idx, 'close']
+            if isinstance(close, numpy.ndarray) and close.size > 1:
+                close = close.tolist()[0]
+            close = Utils.base_round(close, 2)
+            close_pre = dict_data_pre['close']
+            close_chg = Utils.base_round_zero(Utils.division_zero(close - close_pre, close_pre) * 100, 2)
+            dict_data['close'] = close
+            dict_data['close_chg'] = close_chg
+
+            close_open_chg = Utils.base_round_zero(Utils.division_zero(close - open, open) * 100, 2)
+            dict_data['close_open_chg'] = close_open_chg
+        except Exception:
+            traceback.print_exc()
+            # log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code]
+            # log_list.append(self.get_method_name())
+            # log_list.append(traceback.format_exc())
+            # Utils.print_log(log_list)
     #################################################################################################
+
+    def get_max_the_date(self):
+        sql = "select the_date from tquant_stock_history_quotation where security_code = {security_code} order by the_date desc limit 10"
+        the_dates = self.dbService.query(sql.format(security_code=Utils.quotes_surround(self.security_code)))
+        if the_dates is not None and len(the_dates) > 0:
+            return the_dates[len(the_dates) - 1][0]
+        else:
+            return None
 
     def processing_day_kline(self):
         """
@@ -73,401 +298,64 @@ class StockOneTable():
             if self.is_reset:
                 max_the_date = datetime.datetime.now().replace(year=1970, month=1, day=1)
             else:
-                max_the_date = self.get_day_kline_maxthedate()
+                max_the_date = self.get_max_the_date()
             diff_days = Utils.diff_days(max_the_date)
             log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
-                        self.get_method_name(), '日K最大交易日', max_the_date, '距今', Utils.format_date(datetime.date.today()), '差', diff_days, '天']
+                        self.get_method_name(), '最大交易日', max_the_date, '距今', Utils.format_date(datetime.date.today()), '差', diff_days, '天']
             Utils.print_log(log_list)
+            dict_data_pre = None
             if diff_days is None:
-                result = tt.get_all_daybar(self.security_code, 'qfq')
-            elif diff_days > 0:
-                result = tt.get_last_n_daybar(self.security_code, diff_days, 'qfq')
+                result = tt.get_all_daybar(self.security_code, 'bfq')
             else:
-                result = tt.get_last_n_daybar(self.security_code, 7, 'qfq')
+                result = tt.get_last_n_daybar(self.security_code, diff_days, 'bfq')
 
             if result.empty == False:
-                # 索引值为日期
-                indexes_values = result.index.values
-                # 临时存储批量更新sql的列表
-                upsert_sql_list = []
+                # 按照正序排序，时间小的排前面
+                result.sort_index(ascending=True)
                 # 需要处理的单只股票进度计数
                 add_up = 0
                 # 需要处理的单只股票进度打印字符
                 process_line = '='
-                # 循环处理security_code的股票日K数据
-                if indexes_values is not None:
-                    len_indexes = len(indexes_values)
-                    for idx in indexes_values:
-                        add_up += 1
-                        # 解析股票日K数据（每行）
-                        # 解析每行的返回值格式为list [the_date, amount, vol, open, high, low, close]
-                        dict_data = self.analysis_columns_day_kline(result, idx)
-                        if dict_data is not None:
-                            the_date = dict_data['the_date']
-                            is_exist = self.get_day_kline_exist(the_date)
-                            upsert_sql = UtilService.get_day_kline_upsertsql(self.security_code, dict_data, is_exist)
-                            upsert_sql_list.append(upsert_sql)
-                        # 批量(100)提交数据更新
-                        if len(upsert_sql_list) == 200:
-                            self.dbService.insert_many(upsert_sql_list)
-                            process_line += '='
-                            upsert_sql_list = []
-                            progress = Utils.base_round(Utils.division_zero(add_up, len_indexes) * 100, 2)
-
-                            log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
-                                        self.get_method_name(), '处理进度', add_up, len_indexes, process_line, str(progress) + '%']
-                            Utils.print_log(log_list)
-                    # 处理最后一批security_code的更新语句
-                    if len(upsert_sql_list) > 0:
-                        self.dbService.insert_many(upsert_sql_list)
+                list_db_data = []
+                len_indexes = len(result.index.values)
+                for i in range(len_indexes):
+                    add_up += 1
+                    if i < 9:
+                        continue
+                    end = i + 1
+                    start = i - 9
+                    section = result.iloc[start:end, :]
+                    # print('#########################', add_up)
+                    # print(section)
+                    dict_data = self.processing_section(section, dict_data_pre)
+                    # print(i, 'dict_data', dict_data)
+                    list_db_data.append(dict_data)
+                    dict_data_pre = dict_data
+                    # print(dict_data)
+                    self.dbService.upsert(dict_data, 'tquant_stock_history_quotation', ['security_code', 'the_date'])
+                    # 批量打印日志
+                    if len(list_db_data) % 200 == 0:
                         process_line += '='
-                    progress = Utils.base_round(Utils.division_zero(add_up, len(indexes_values)) * 100, 2)
-
-                    log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
-                                self.get_method_name(), '处理进度', add_up, len_indexes, process_line, str(progress) + '%']
-                    Utils.print_log(log_list)
-                else:
-                    log_list = [Utils.get_now(), Utils.get_warn(), self.get_classs_name(), self.security_code,
-                                self.get_method_name(), '【日K DataFrame索引为空】']
-                    Utils.print_log(log_list)
+                        progress = Utils.base_round(Utils.division_zero(add_up, len_indexes) * 100, 2)
+                        log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
+                                    self.get_method_name(), '处理进度', add_up, len_indexes, process_line, str(progress) + '%']
+                        Utils.print_log(log_list)
+                process_line += '='
+                progress = Utils.base_round(Utils.division_zero(add_up, len_indexes) * 100, 2)
+                log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
+                            self.get_method_name(), '处理进度', add_up, len_indexes, process_line, str(progress) + '%']
+                Utils.print_log(log_list)
+                # self.dbService.upsert_many(list_db_data, 'tquant_stock_history_quotation', ['security_code', 'the_date'])
             else:
                 log_list = [Utils.get_now(), Utils.get_warn(), self.get_classs_name(), self.security_code,
                             self.get_method_name(), '【日K DataFrame为空】']
                 Utils.print_log(log_list)
         except Exception:
-            log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
-                        self.get_method_name(), traceback.format_exc()]
-            Utils.print_log(log_list)
-
-    def get_day_kline_exist(self, the_date):
-        sql = "select count(*) from tquant_stock_history_quotation " \
-              "where security_code = {security_code} and the_date = {the_date} "
-        sql = sql.format(security_code=Utils.quotes_surround(self.security_code),
-                         the_date=Utils.quotes_surround(the_date))
-        size = self.dbService.query(sql)
-        if size is not None:
-            size = size[0][0]
-            if size == 1:
-                return True
-            return False
-
-    def get_day_kline_maxthedate(self):
-        sql = "select the_date from tquant_stock_history_quotation " \
-              "where security_code = {security_code} " \
-              "order by the_date desc limit 1 ".format(security_code=Utils.quotes_surround(self.security_code))
-        the_date = self.dbService.query(sql)
-        if the_date is not None and len(the_date) > 0:
-            return the_date[0][0]
-        return None
-
-    def analysis_columns_day_kline(self, day_kline, idx):
-        """
-        股票日K数据处理方法
-        :param day_kline: 日K的DataFrame
-        :param idx: DataFrame的索引
-        :return: 
-        """
-        try:
-            the_date = (str(idx))[0:10]
-
-            amount = day_kline.at[idx, 'amount']
-            # amount的类型为numpy.ndarray，是一个多维数组，可能包含多个值，其他的字段也是一样，测试的时候发现有异常抛出
-            if isinstance(amount, numpy.ndarray) and amount.size > 1:
-                amount = amount.tolist()[0]
-            amount = Utils.base_round(amount, 2)
-
-            vol = day_kline.at[idx, 'vol']
-            if isinstance(vol, numpy.ndarray) and vol.size > 1:
-                vol = vol.tolist()[0]
-            vol = Utils.base_round(vol, 2)
-
-            open = day_kline.at[idx, 'open']
-            if isinstance(open, numpy.ndarray) and open.size > 1:
-                open = open.tolist()[0]
-            open = Utils.base_round(open, 2)
-
-            high = day_kline.at[idx, 'high']
-            if isinstance(high, numpy.ndarray) and high.size > 1:
-                high = high.tolist()[0]
-            high = Utils.base_round(high, 2)
-
-            low = day_kline.at[idx, 'low']
-            if isinstance(low, numpy.ndarray) and low.size > 1:
-                low = low.tolist()[0]
-            low = Utils.base_round(low, 2)
-
-            close = day_kline.at[idx, 'close']
-            if isinstance(close, numpy.ndarray) and close.size > 1:
-                close = close.tolist()[0]
-            close = Utils.base_round(close, 2)
-
-            return {'the_date': the_date, 'amount': amount,
-                    'vol': vol, 'open': open, 'high': high, 'low': low, 'close': close}
-        except Exception:
-            log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code]
-            log_list.append(self.get_method_name())
-            log_list.append(traceback.format_exc())
-            Utils.print_log(log_list)
-            return None
+            traceback.print_exc()
+            # log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
+            #             self.get_method_name(), traceback.format_exc()]
+            # Utils.print_log(log_list)
     #############################################################################################################
-
-    def procesing_day_kline_after(self):
-        """
-        日K数据入库后计算涨跌幅，均线，均值等数据，并入库
-        :return: 
-        """
-        # 股票日K涨跌幅处理方法
-        log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
-                    self.get_method_name()]
-        Utils.print_log(log_list)
-
-        self.processing_day_kline_chg()
-        if self.mas is not None and len(self.mas) > 0:
-            for ma in self.mas:
-                # 股票均线数据处理方法
-                self.processing_ma(ma)
-            self.processing_ma_10_diff()
-
-    def processing_ma_10_diff(self):
-        try:
-            ma = 10
-            if self.is_reset:
-                min_the_date = datetime.datetime.now().replace(year=1970, month=1, day=1)
-            else:
-                min_the_date = self.get_day_kline_ma_10_diff_maxthedate(ma)
-            log_list = [Utils.get_now(), Utils.get_warn(), self.get_classs_name(), self.security_code,
-                        self.get_method_name(), 'ma', ma, 'MA10 diff最大交易日(前10日)', Utils.format_date(min_the_date)]
-            Utils.print_log(log_list)
-            result = self.get_all_day_kline(min_the_date)
-            if result is not None and len(result) > 0:
-                update_list = []
-                process_line = ''
-                add_up = ma - 1
-                dict_pre_data = None
-                for i in range(len(result)):
-                    if (i + ma) > len(result):
-                        break
-                    add_up += 1
-                    temp_data = result[i:i + ma]
-                    if dict_pre_data is None:
-                        dict_pre_data = self.get_pre_day_kline_ma_10_avg_chg_avg(temp_data[len(temp_data) - 1][0])
-                        if dict_pre_data is None:
-                            dict_pre_data = {'price_avg_chg_10_avg_pre': 0}
-                    dict_data = self.get_calculate_ma_10_chg_diff(temp_data, dict_pre_data)
-                    dict_pre_data['price_avg_chg_10_avg_pre'] = dict_data['price_avg_chg_10_avg']
-                    the_date = temp_data[len(temp_data) - 1][0]
-                    update_sql = self.update_ma_10_chg_diff(dict_data, the_date)
-                    update_list.append(update_sql)
-                    if len(update_list) == 200:
-                        self.dbService.insert_many(update_list)
-                        process_line += '='
-                        progress = Utils.base_round(Utils.division_zero(add_up, len(result)) * 100, 2)
-                        log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
-                                    self.get_method_name(), 'ma', ma, '处理进度', add_up, len(result), process_line,
-                                    str(progress) + '%']
-                        Utils.print_log(log_list)
-                        update_list = []
-                if len(update_list) > 0:
-                    self.dbService.insert_many(update_list)
-                process_line += '='
-                progress = Utils.base_round(Utils.division_zero(add_up, len(result)) * 100, 2)
-                log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
-                            self.get_method_name(),  'ma', ma, '处理进度', add_up, len(result), process_line,
-                            str(progress) + '%']
-                Utils.print_log(log_list)
-        except Exception:
-            log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
-                        self.get_method_name(), traceback.format_exc()]
-            Utils.print_log(log_list)
-
-    def processing_ma(self, ma):
-        # ma对应的字段名
-        price_avg_ma = 'price_avg_' + str(ma)
-        price_avg_chg_ma = 'price_avg_chg_' + str(ma)
-        # 确认已经处理过的最大交易日
-        try:
-            if self.is_reset:
-                min_the_date = datetime.datetime.now().replace(year=1970, month=1, day=1)
-            else:
-                min_the_date = self.get_day_kline_ma_maxthedate(price_avg_ma, ma)
-            log_list = [Utils.get_now(), Utils.get_warn(), self.get_classs_name(), self.security_code,
-                        self.get_method_name(), 'ma', ma, 'MA均线最大交易日(前ma日)', Utils.format_date(min_the_date)]
-            Utils.print_log(log_list)
-
-            result = self.get_all_day_kline(min_the_date)
-            if result is not None and len(result) > 0:
-                update_list = []
-                process_line = ''
-                add_up = ma - 1
-                dict_pre_data = None
-                for i in range(len(result)):
-                    if (i + ma) > len(result):
-                        break
-                    add_up += 1
-                    temp_data = result[i:i + ma]
-                    if dict_pre_data is None:
-                        dict_pre_data = self.get_pre_day_kline_ma(temp_data[len(temp_data)-1][0], price_avg_ma, price_avg_chg_ma)
-                        if dict_pre_data is None:
-                            dict_pre_data = {'price_avg_ma_pre': 0, 'price_avg_chg_ma_pre': 0}
-                    dict_data = self.get_calculate_ma_chg(temp_data, dict_pre_data)
-                    dict_pre_data['price_avg_ma_pre'] = dict_data['price_avg_ma']
-                    dict_pre_data['price_avg_chg_ma_pre'] = dict_data['price_avg_chg_ma']
-                    the_date = temp_data[len(temp_data) - 1][0]
-                    update_sql = self.update_ma_chg(price_avg_ma, price_avg_chg_ma, dict_data, the_date)
-                    update_list.append(update_sql)
-                    if len(update_list) == 200:
-                        self.dbService.insert_many(update_list)
-                        process_line += '='
-                        progress = Utils.base_round(Utils.division_zero(add_up, len(result)) * 100, 2)
-                        log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
-                                    self.get_method_name(), 'ma', ma, '处理进度', add_up, len(result), process_line,
-                                    str(progress) + '%']
-                        Utils.print_log(log_list)
-                        update_list = []
-                if len(update_list) > 0:
-                    self.dbService.insert_many(update_list)
-                process_line += '='
-                progress = Utils.base_round(Utils.division_zero(add_up, len(result)) * 100, 2)
-                log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
-                            self.get_method_name(),  'ma', ma, '处理进度', add_up, len(result), process_line,
-                            str(progress) + '%']
-                Utils.print_log(log_list)
-        except Exception:
-            log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
-                        self.get_method_name(), 'ma', ma, traceback.format_exc()]
-            Utils.print_log(log_list)
-
-
-    def update_ma_chg(self, price_avg_ma, price_avg_chg_ma, dict_data, the_date):
-        sql = "update tquant_stock_history_quotation " \
-              "set "
-        if dict_data['money_flow'] is not None:
-            sql += "money_flow = {money_flow}, "
-            sql = sql.format(money_flow=dict_data['money_flow'])
-        if dict_data['close_10_price_avg_chg'] is not None:
-            sql += "close_10_price_avg_chg = {close_10_price_avg_chg}, "
-            sql = sql.format(close_10_price_avg_chg=dict_data['close_10_price_avg_chg'])
-        sql += price_avg_ma + " = {price_avg_ma}, "
-        sql += price_avg_chg_ma + " = {price_avg_chg_ma} "
-        sql += "where security_code = {security_code} and the_date = {the_date} "
-
-        sql = sql.format(price_avg_ma=dict_data['price_avg_ma'],
-                         price_avg_chg_ma=dict_data['price_avg_chg_ma'],
-                         security_code=Utils.quotes_surround(self.security_code),
-                         the_date=Utils.quotes_surround(Utils.format_date(the_date))
-                         )
-        return sql
-
-    def update_ma_10_chg_diff(self, dict_data, the_date):
-        sql = "update tquant_stock_history_quotation " \
-              "set price_avg_chg_10_avg = {price_avg_chg_10_avg}, " \
-              "price_avg_chg_10_avg_diff = {price_avg_chg_10_avg_diff} " \
-              "where security_code = {security_code} and the_date = {the_date} "
-        sql = sql.format(price_avg_chg_10_avg=dict_data['price_avg_chg_10_avg'],
-                         price_avg_chg_10_avg_diff=dict_data['price_avg_chg_10_avg_diff'],
-                         security_code=Utils.quotes_surround(self.security_code),
-                         the_date=Utils.quotes_surround(Utils.format_date(the_date))
-                         )
-        return sql
-
-    def get_pre_day_kline_ma(self, the_date, price_avg_ma, price_avg_chg_ma):
-        sql = "select " + price_avg_ma + ", " + price_avg_chg_ma \
-              + " from tquant_stock_history_quotation " \
-              "where security_code = {security_code} and the_date < {the_date} " \
-              "order by the_date desc limit 1"
-        sql = sql.format(security_code=Utils.quotes_surround(self.security_code),
-                         the_date=Utils.quotes_surround(Utils.format_date(the_date)))
-        result = self.dbService.query(sql)
-        if result is not None and len(result) > 0:
-            price_avg = result[0][0]
-            price_avg_chg = result[0][1]
-            return {'price_avg_ma_pre': price_avg, 'price_avg_chg_ma_pre': price_avg_chg}
-        return None
-
-    def get_pre_day_kline_ma_10_avg_chg_avg(self, the_date):
-        sql = "select price_avg_chg_10_avg from tquant_stock_history_quotation " \
-              "where security_code = {security_code} and the_date < {the_date} " \
-              "order by the_date desc limit 1"
-        sql = sql.format(security_code=Utils.quotes_surround(self.security_code),
-                         the_date=Utils.quotes_surround(Utils.format_date(the_date)))
-        result = self.dbService.query(sql)
-        if result is not None and len(result) > 0:
-            price_avg_chg_10_avg = result[0][0]
-            return {'price_avg_chg_10_avg_pre': price_avg_chg_10_avg}
-        return None
-
-
-    def get_calculate_ma_chg(self, temp_data, dict_pre_data):
-        """
-        sql = "select the_date, amount, vol, open, high, low, close " \
-              "from tquant_stock_history_quotation " \
-              "where security_code = {security_code} " \
-              "and the_date >= {min_the_date} " \
-              "order by the_date asc "
-        """
-        price_avg_ma_pre = dict_pre_data['price_avg_ma_pre']
-        price_avg_chg_ma_pre = dict_pre_data['price_avg_chg_ma_pre']
-
-        if price_avg_ma_pre is None:
-            price_avg_ma_pre = 0
-        if price_avg_chg_ma_pre is None:
-            price_avg_chg_ma_pre = 0
-        amount_list = [amount for amount in [item[1] for item in temp_data]]
-        vol_list = [vol for vol in [item[2] for item in temp_data]]
-        price_avg_ma = Utils.base_round_zero(Utils.division_zero(Utils.sum_zero(amount_list), Utils.sum_zero(vol_list)), 2)
-        price_avg_chg_ma = Utils.base_round_zero(Utils.division_zero((price_avg_ma - price_avg_ma_pre), price_avg_ma_pre) * 100, 2)
-        amount = temp_data[len(temp_data) - 1][1]
-        money_flow = None
-        close_10_price_avg_chg = None
-        if len(temp_data) == 10:
-            amount_avg = Utils.base_round(Utils.division_zero(Utils.sum_zero(amount_list), 10), 2)
-            money_flow = Utils.base_round(Utils.division_zero(amount, amount_avg) * 100, 2)
-            close = temp_data[len(temp_data)-1][6]
-            close_10_price_avg_chg = Utils.base_round_zero(Utils.division_zero(close - price_avg_ma, price_avg_ma) * 100, 2)
-        return {'price_avg_ma': price_avg_ma, 'price_avg_chg_ma': price_avg_chg_ma,
-                'money_flow': money_flow, 'close_10_price_avg_chg': close_10_price_avg_chg}
-
-    def get_calculate_ma_10_chg_diff(self, temp_data, dict_pre_data):
-        """
-        sql = "select the_date, amount, vol, open, high, low, close, price_avg_chg_10 " \
-              "from tquant_stock_history_quotation " \
-              "where security_code = {security_code} " \
-              "and the_date >= {min_the_date} " \
-              "order by the_date asc "
-        """
-        price_avg_chg_10_avg_pre = dict_pre_data['price_avg_chg_10_avg_pre']
-
-        if price_avg_chg_10_avg_pre is None:
-            price_avg_chg_10_avg_pre = 0
-        price_avg_chg_10_list = [price_avg_chg_10 for price_avg_chg_10 in [item[7] for item in temp_data]]
-        price_avg_chg_10_avg = Utils.base_round_zero(Utils.division_zero(Utils.sum_zero(price_avg_chg_10_list), len(temp_data)), 2)
-        price_avg_chg_10_avg_diff = price_avg_chg_10_avg - price_avg_chg_10_avg_pre
-
-        return {'price_avg_chg_10_avg': price_avg_chg_10_avg, 'price_avg_chg_10_avg_diff': price_avg_chg_10_avg_diff}
-
-    def get_day_kline_ma_maxthedate(self, price_avg_ma, ma):
-        ma += 7
-        sql = "select the_date from tquant_stock_history_quotation " \
-              "where security_code = {security_code} " \
-              "and " + price_avg_ma + " is not null " \
-              "order by the_date desc limit {ma}"
-        the_dates = self.dbService.query(sql.format(security_code=Utils.quotes_surround(self.security_code), ma=ma))
-        if the_dates is not None and len(the_dates) > 0:
-            the_date = the_dates[len(the_dates) - 1][0]
-            return the_date
-        return None
-
-    def get_day_kline_ma_10_diff_maxthedate(self, ma):
-        ma += 7
-        sql = "select the_date from tquant_stock_history_quotation " \
-              "where security_code = {security_code} " \
-              "and price_avg_chg_10_avg is not null " \
-              "order by the_date desc limit {ma} "
-        the_dates = self.dbService.query(sql.format(security_code=Utils.quotes_surround(self.security_code), ma=ma))
-        if the_dates is not None and len(the_dates) > 0:
-            the_date = the_dates[len(the_dates)-1][0]
-            return the_date
-        return None
 
     def processing_real_time_kline(self):
         """
@@ -610,100 +498,3 @@ class StockOneTable():
             Utils.print_log(log_list)
 
     # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
-    def processing_day_kline_chg(self):
-        try:
-            if self.is_reset:
-                min_the_date = datetime.datetime.now().replace(year=1970, month=1, day=1)
-            else:
-                min_the_date = self.get_day_kline_chg_maxthedate()
-            log_list = [Utils.get_now(), Utils.get_warn(), self.get_classs_name(), self.security_code,
-                        self.get_method_name(), '涨跌幅最大交易日(前推一日)', Utils.format_date(min_the_date)]
-            Utils.print_log(log_list)
-            result = self.get_all_day_kline(min_the_date)
-            if result is not None and len(result) > 0:
-                update_list = []
-                """
-                sql = "select the_date, amount, vol, open, high, low, close " \
-                  "from tquant_stock_history_quotation " \
-                  "where security_code = {security_code} " \
-                  "and the_date >= {min_the_date} " \
-                  "order by the_date asc "
-                  """
-                process_line = ''
-                add_up = 0
-                dict_pre_data = None
-                for i in range(len(result)):
-                    add_up += 1
-                    if i == len(result) - 1:
-                        break
-                    the_date = result[i+1][0]
-                    dict_item1 = {'vol': result[i][2], 'close': result[i][6], 'amount': result[i][1], 'open': result[i][3]}
-                    dict_item2 = {'vol': result[i+1][2], 'close': result[i+1][6], 'amount': result[i+1][1], 'open': result[i+1][3]}
-                    if dict_pre_data is None:
-                        dict_pre_data = self.get_pre_day_kline(the_date)
-                        if dict_pre_data is None:
-                            dict_pre_data = {'price_avg_pre': 0}
-                    dict_data = UtilService.processing_day_kline_chg_calculate(dict_item1, dict_item2, dict_pre_data)
-                    dict_pre_data['price_avg_pre'] = dict_data['price_avg']
-                    update_sql = UtilService.get_day_kline_chg_upsertsql(self.security_code, the_date, dict_data)
-                    update_list.append(update_sql)
-                    if len(update_list) == 200:
-                        self.dbService.insert_many(update_list)
-                        process_line += '='
-                        progress = Utils.base_round(Utils.division_zero(add_up, len(result)) * 100, 2)
-                        log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
-                                    self.get_method_name(), '处理进度', add_up, len(result), process_line,
-                                    str(progress) + '%']
-                        Utils.print_log(log_list)
-                        update_list = []
-                if len(update_list) > 0:
-                    self.dbService.insert_many(update_list)
-                process_line += '='
-                progress = Utils.base_round(Utils.division_zero(add_up, len(result)) * 100, 2)
-                log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
-                            self.get_method_name(), '处理进度', add_up, len(result), process_line,
-                            str(progress) + '%']
-                Utils.print_log(log_list)
-        except Exception:
-            log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
-                        self.get_method_name(), traceback.format_exc()]
-            Utils.print_log(log_list)
-
-    def get_pre_day_kline(self, the_date):
-        sql = "select price_avg from tquant_stock_history_quotation " \
-              "where security_code = {security_code} and the_date < {the_date} " \
-              "order by the_date desc limit 1"
-        sql = sql.format(security_code=Utils.quotes_surround(self.security_code),
-                         the_date=Utils.quotes_surround(Utils.format_date(the_date)))
-        result = self.dbService.query(sql)
-        if result is not None and len(result) > 0:
-            price_avg = result[0][0]
-            return {'price_avg_pre': price_avg}
-        return None
-
-
-    def get_day_kline_chg_maxthedate(self):
-        sql = "select the_date from tquant_stock_history_quotation " \
-              "where security_code = {security_code} " \
-              "and close_chg is not null " \
-              "order by the_date desc limit 7"
-        the_dates = self.dbService.query(sql.format(security_code=Utils.quotes_surround(self.security_code)))
-        if the_dates is not None and len(the_dates) > 0:
-            the_date = the_dates[len(the_dates) - 1][0]
-            return the_date
-        return None
-
-    def get_all_day_kline(self, min_the_date):
-        if min_the_date is None:
-            min_the_date = datetime.datetime.now().replace(year=1970, month=1, day=1)
-        sql = "select the_date, amount, vol, open, high, low, close, " \
-              "price_avg_chg_10 " \
-              "from tquant_stock_history_quotation " \
-              "where security_code = {security_code} " \
-              "and the_date >= {min_the_date} " \
-              "order by the_date asc "
-        sql = sql.format(security_code=Utils.quotes_surround(self.security_code),
-                         min_the_date=Utils.quotes_surround(Utils.format_date(min_the_date)))
-        result = self.dbService.query(sql)
-        return result
-        # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@

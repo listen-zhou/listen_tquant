@@ -31,8 +31,9 @@ if __name__ == '__main__':
             securty_codes = [securty_codes[i][0] for i in range(len(securty_codes))]
             print('security_codes after len', len(securty_codes))
             for securty_code in securty_codes:
-                service = StockOneTable(securty_code, False, flag)
+                service = StockOneTable(securty_code, False)
                 pool.apply_async(long_time_task_wrapper, args=(service, ))
+                # break
             pool.close()
             pool.join()
             print('done')

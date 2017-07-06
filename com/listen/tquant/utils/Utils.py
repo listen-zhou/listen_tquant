@@ -133,4 +133,10 @@ class Utils():
         else:
             return date
 
+    @staticmethod
+    def format_week_day(val):
+        if isinstance(val, datetime.date) or isinstance(val, datetime.datetime):
+            return val.weekday() + 1
+        return val
+
 
