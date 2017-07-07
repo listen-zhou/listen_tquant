@@ -391,6 +391,7 @@ class DbService(object):
         sql = "select security_code, exchange_code, security_name, worth_buying " \
               "from tquant_security_info " \
               "where security_code not like '3%' " \
+              "and worth_buying > 0 " \
               "order by security_code asc "
         return self.query(sql)
 

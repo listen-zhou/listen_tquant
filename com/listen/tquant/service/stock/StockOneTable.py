@@ -2,6 +2,7 @@
 import datetime
 import inspect
 
+import pandas
 import tquant as tt
 import numpy
 
@@ -23,9 +24,10 @@ class StockOneTable():
     def get_method_name(self):
         return inspect.stack()[1][3]
 
-    def __init__(self, security_code, is_reset):
+    def __init__(self, security_code, is_reset, flag):
         self.security_code = security_code
         self.is_reset = is_reset
+        self.flag = flag
         log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
                     self.get_method_name()]
         Utils.print_log(log_list)
@@ -39,49 +41,53 @@ class StockOneTable():
         :return: 
         """
         # 股票日K数据处理方法
-        self.processing_day_kline()
-        # self.processing_real_time_kline()
+        if self.flag:
+            self.processing_day_kline()
+        self.processing_real_time_kline()
 
         log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
                     self.get_method_name(), self.security_code + '【【end】】']
         Utils.print_log(log_list)
 
+    @staticmethod
+    def get_field_names():
+        list_keys = [
+            'security_code', 'the_date',
+            'close', 'close_chg', 'close_open_chg',
+            'open', 'open_chg', 'high', 'high_chg', 'low', 'low_chg',
+            'amount', 'amount_chg', 'vol', 'vol_chg', 'week_day',
+            'price_avg_1', 'price_avg_1_chg', 'price_avg_1_chg_diff', 'close_price_avg_1_chg',
+            'price_avg_3', 'price_avg_3_chg', 'price_avg_3_chg_diff', 'close_price_avg_3_chg',
+            'price_avg_5', 'price_avg_5_chg', 'price_avg_5_chg_diff', 'close_price_avg_5_chg',
+            'price_avg_10', 'price_avg_10_chg', 'price_avg_10_chg_diff', 'close_price_avg_10_chg'
+        ]
+        return list_keys
+
+    @staticmethod
+    def get_select_sql():
+        sql = "select "
+        for field_name in StockOneTable.get_field_names():
+            sql += " " + field_name + ","
+        sql = sql[0:len(sql) - 1]
+        sql += " from tquant_stock_history_quotation "
+        return sql
+
+    @staticmethod
+    def get_dict_from_tuple(tuple_data):
+        if tuple_data is not None and len(tuple_data) == len(StockOneTable.get_field_names()):
+            dict_data = {}
+            i = 0
+            for field_name in StockOneTable.get_field_names():
+                dict_data[field_name] = tuple_data[i]
+                i += 1
+            return dict_data
+        else:
+            print('tuple_data为空，或tuple_data len[', len(tuple_data), ']与StockOneTable.get_field_names() len[', len(StockOneTable.get_field_names()), ']不一致')
+            return None
+
     def processing_section(self, section, dict_data_pre):
         """
         处理切片，分3、5、10等切片数据
-        tquant_stock_history_quotation
-            `security_code` VARCHAR(20) NOT NULL COMMENT '股票代码',
-            `the_date` DATE NOT NULL COMMENT '交易日',
-            `close` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '收盘价',
-            `close_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '收盘价幅',
-            `close_open_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '收盘价与开盘价幅',
-            `open` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '开盘价',
-            `open_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '开盘价幅',
-            `high` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '最高价',
-            `high_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '最高价幅',
-            `low` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '最低价',
-            `low_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '最低价幅',
-            `amount` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '交易额(元)',
-            `amount_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '交易额幅',
-            `vol` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '交易量(手)',
-            `vol_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '交易量幅',
-            `week_day` INT(11) NULL DEFAULT NULL COMMENT '周几',
-            `price_avg_1` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '日均价',
-            `price_avg_1_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '日均价涨跌幅',
-            `price_avg_1_chg_diff` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '日均价涨跌幅差',
-            `close_price_avg_1_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '收盘与日均价幅',
-            `price_avg_3` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '3日均价',
-            `price_avg_3_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '3日均价涨跌幅',
-            `price_avg_3_chg_diff` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '3日均价涨跌幅差',
-            `close_price_avg_3_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '收盘与3日均价幅',
-            `price_avg_5` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '5日均价',
-            `price_avg_5_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '5日均价涨跌幅',
-            `price_avg_5_chg_diff` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '5日均价涨跌幅差',
-            `close_price_avg_5_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '收盘与5日均价幅',
-            `price_avg_10` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '10日均价',
-            `price_avg_10_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '10日均价涨跌幅',
-            `price_avg_10_chg_diff` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '10日均价涨跌幅差',
-            `close_price_avg_10_chg` DECIMAL(20,2) NULL DEFAULT NULL COMMENT '收盘与10日均价幅',
         :param section:
                         DataFrame切片数据
                         example         amount  close  code  high   low  open        vol
@@ -102,29 +108,30 @@ class StockOneTable():
         # 日涨跌幅计算
         section_tail1 = section.tail(1)
         idx = section_tail1.index.values[0]
-        the_date = idx.astype('M8[ms]').astype('O')
+        if isinstance(idx, datetime.datetime) or isinstance(idx, datetime.date):
+            the_date = idx
+        else:
+            the_date = idx.astype('M8[ms]').astype('O')
         week_day = Utils.format_week_day(the_date)
         dict_data['week_day'] = week_day
         the_date = Utils.format_date(the_date)
         dict_data['the_date'] = Utils.quotes_surround(the_date)
         if dict_data_pre is None:
-            print('第一次dict_data_pre为None')
+            print('secuirty_code', self.security_code, '第一次dict_data_pre为None')
             # 转换时间格式，结果为<class 'datetime.datetime'> 1991-11-29 00:00:00
             dict_data_pre = self.get_dict_data_pre(the_date)
             if dict_data_pre is None:
-                print('查询后dict_data_pre还是为None，只能创建为0的数据')
+                print('secuirty_code', self.security_code, '查询后dict_data_pre还是为None，只能创建为0的数据')
                 dict_data_pre = self.create_blank_dict_data()
         self.processing_1_day_chg(section_tail1, idx, dict_data, dict_data_pre)
         for days in [1, 3, 5, 10]:
             self.processing_avg(section.tail(days), days, dict_data, dict_data_pre)
+        self.dbService.upsert(dict_data, 'tquant_stock_history_quotation', ['security_code', 'the_date'])
         return dict_data
 
     def get_dict_data_pre(self, the_date):
-        sql = "select close, open, high, low, amount, vol, " \
-              "price_avg_1, price_avg_1_chg, price_avg_3, price_avg_3_chg, " \
-              "price_avg_5, price_avg_5_chg, price_avg_10, price_avg_10_chg " \
-              "from tquant_stock_history_quotation " \
-              "where security_code = {security_code} and the_date < {the_date} " \
+        sql = StockOneTable.get_select_sql() \
+              + " where security_code = {security_code} and the_date < {the_date} " \
               "order by the_date desc limit 1"
         sql = sql.format(security_code=self.security_code, the_date=Utils.quotes_surround(the_date))
         tuple_datas = self.dbService.query(sql)
@@ -134,21 +141,7 @@ class StockOneTable():
                 if tuple_data[0] is None:
                     return None
                 else:
-                    dict_data = {}
-                    dict_data['close'] = tuple_data[0]
-                    dict_data['open'] = tuple_data[1]
-                    dict_data['high'] = tuple_data[2]
-                    dict_data['low'] = tuple_data[3]
-                    dict_data['amount'] = tuple_data[4]
-                    dict_data['vol'] = tuple_data[5]
-                    dict_data['price_avg_1'] = tuple_data[6]
-                    dict_data['price_avg_1_chg'] = tuple_data[7]
-                    dict_data['price_avg_3'] = tuple_data[8]
-                    dict_data['price_avg_3_chg'] = tuple_data[9]
-                    dict_data['price_avg_5'] = tuple_data[10]
-                    dict_data['price_avg_5_chg'] = tuple_data[11]
-                    dict_data['price_avg_10'] = tuple_data[12]
-                    dict_data['price_avg_10_chg'] = tuple_data[13]
+                    dict_data = StockOneTable.get_dict_from_tuple(tuple_data)
                     return dict_data
             else:
                 return None
@@ -157,20 +150,8 @@ class StockOneTable():
 
     def create_blank_dict_data(self):
         dict_data = {}
-        dict_data['close'] = 0
-        dict_data['open'] = 0
-        dict_data['high'] = 0
-        dict_data['low'] = 0
-        dict_data['amount'] = 0
-        dict_data['vol'] = 0
-        dict_data['price_avg_1'] = 0
-        dict_data['price_avg_1_chg'] = 0
-        dict_data['price_avg_3'] = 0
-        dict_data['price_avg_3_chg'] = 0
-        dict_data['price_avg_5'] = 0
-        dict_data['price_avg_5_chg'] = 0
-        dict_data['price_avg_10'] = 0
-        dict_data['price_avg_10_chg'] = 0
+        for field_name in StockOneTable.get_field_names():
+            dict_data[field_name] = 0
         return dict_data
 
     def processing_avg(self, section_tail, days, dict_data, dict_data_pre):
@@ -186,11 +167,10 @@ class StockOneTable():
         :return:
         """
         try:
-            # print(days, section_tail)
-            section_describe = section_tail.sum()
+            section_sum = section_tail.sum()
 
-            amount_count = section_describe['amount']
-            vol_count = section_describe['vol']
+            amount_count = section_sum['amount']
+            vol_count = section_sum['vol']
 
             price_avg_ = "price_avg_"
             _chg = "_chg"
@@ -316,7 +296,6 @@ class StockOneTable():
                 add_up = 0
                 # 需要处理的单只股票进度打印字符
                 process_line = '='
-                list_db_data = []
                 len_indexes = len(result.index.values)
                 for i in range(len_indexes):
                     add_up += 1
@@ -325,16 +304,10 @@ class StockOneTable():
                     end = i + 1
                     start = i - 9
                     section = result.iloc[start:end, :]
-                    # print('#########################', add_up)
-                    # print(section)
                     dict_data = self.processing_section(section, dict_data_pre)
-                    # print(i, 'dict_data', dict_data)
-                    list_db_data.append(dict_data)
                     dict_data_pre = dict_data
-                    # print(dict_data)
-                    self.dbService.upsert(dict_data, 'tquant_stock_history_quotation', ['security_code', 'the_date'])
                     # 批量打印日志
-                    if len(list_db_data) % 200 == 0:
+                    if add_up % 200 == 0:
                         process_line += '='
                         progress = Utils.base_round(Utils.division_zero(add_up, len_indexes) * 100, 2)
                         log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
@@ -352,9 +325,6 @@ class StockOneTable():
                 Utils.print_log(log_list)
         except Exception:
             traceback.print_exc()
-            # log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
-            #             self.get_method_name(), traceback.format_exc()]
-            # Utils.print_log(log_list)
     #############################################################################################################
 
     def processing_real_time_kline(self):
@@ -374,20 +344,15 @@ class StockOneTable():
                 # if True:
                 # 5分钟K的实时行情
                 day_kline = tt.get_stock_bar(self.security_code, 1)
-                # print('day_kline', day_kline)
                 # 处理单只股票的实时行情，并入库
                 self.analysis_real_time_kline(day_kline, start_date)
-                # 股票日K涨跌幅处理方法
-                self.procesing_day_kline_after()
             else:
                 log_list = [Utils.get_now(), Utils.get_warn(), self.get_classs_name(), self.security_code,
                             self.get_method_name(), '当日全部5分钟实时行情 开始时间', start_date, '拉取时间', current_date,
                             '结束时间', end_date, '【交易结束或不在交易时间段内】']
                 Utils.print_log(log_list)
         except Exception:
-            log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
-                        self.get_method_name(), traceback.format_exc()]
-            Utils.print_log(log_list)
+            traceback.print_exc()
 
 
     def analysis_real_time_kline(self, day_kline, start_date):
@@ -405,96 +370,80 @@ class StockOneTable():
                                 self.get_method_name(), '当日全部5分钟实时行情 开始时间', start_date, '【行情为空】']
                     Utils.print_log(log_list)
                     return
-                add_up = 0
-                process_line = '='
-                len_indexes = len(indexes_values)
                 the_date = None
-                high_max = None
-                low_min = None
-                open_first = None
-                close_last = None
-                total_amount = 0
-                total_vol = 0
+                first_idx = None
+                last_idx = indexes_values[len(indexes_values) - 1]
                 for idx in indexes_values:
-                    add_up += 1
-                    idx_datetime = datetime.datetime.utcfromtimestamp(idx.astype('O') / 1e9)
+                    idx_datetime = idx.astype('M8[ms]').astype('O')
+                    # idx_datetime = datetime.datetime.utcfromtimestamp(idx.astype('O') / 1e9)
                     # 由于第三方接口返回的数据是最近1000个5分钟K，所以需要剔除不是今天的数据
                     if idx_datetime >= start_date:
-                        amount = day_kline.at[idx, 'amount']
-                        if isinstance(amount, numpy.ndarray) and amount.size > 1:
-                            amount = amount.tolist()[0]
-                        amount = Utils.base_round(amount, 2)
-                        total_amount += amount
-
-                        vol = day_kline.at[idx, 'vol']
-                        if isinstance(vol, numpy.ndarray) and vol.size > 1:
-                            vol = vol.tolist()[0]
-                        vol = Utils.base_round(vol, 2)
-                        total_vol += Utils.base_round(vol, 2)
-
-                        high = day_kline.at[idx, 'high']
-                        if isinstance(high, numpy.ndarray) and high.size > 1:
-                            high = high.tolist()[0]
-                        high = Utils.base_round(high, 2)
-                        if high_max is None:
-                            high_max = high
-                        elif high > high_max:
-                            high_max = high
-
-                        low = day_kline.at[idx, 'low']
-                        if isinstance(low, numpy.ndarray) and low.size > 1:
-                            low = low.tolist()[0]
-                        low = Utils.base_round(low, 2)
-                        if low_min is None:
-                            low_min = low
-                        elif low < low_min:
-                            low_min = low
-
-                        open = day_kline.at[idx, 'open']
-                        if isinstance(open, numpy.ndarray) and open.size > 1:
-                            open = open.tolist()[0]
-                        open = Utils.base_round(open, 2)
-                        if open_first is None:
-                            open_first = open
-
-                        close = day_kline.at[idx, 'close']
-                        if isinstance(close, numpy.ndarray) and close.size > 1:
-                            close = close.tolist()[0]
-                        close = Utils.base_round(close, 2)
-                        close_last = close
-
+                        first_idx = idx
+                        day_kline = day_kline[idx:]
                         the_date = idx_datetime
-                    if add_up % 200 == 0:
-                        process_line += '='
-                        progress = Utils.base_round(Utils.division_zero(add_up, len_indexes) * 100, 2)
-                        log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
-                                    self.get_method_name(), '处理进度', add_up, len_indexes, process_line,
-                                    str(progress) + '%']
-                        Utils.print_log(log_list)
-                process_line += '='
-                progress = Utils.base_round(Utils.division_zero(add_up, len_indexes) * 100, 2)
-                log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
-                            self.get_method_name(), '处理进度', add_up, len_indexes, process_line,
-                            str(progress) + '%']
-                Utils.print_log(log_list)
-
+                        the_date = Utils.format_date(the_date)
+                        break
                 if the_date is not None:
-                    total_amount = total_amount * 100
-                    total_vol = total_vol * 100
-                    dict_data = {'the_date': Utils.format_date(the_date),
-                                 'amount': total_amount,
-                                 'vol': total_vol,
-                                 'open': open_first,
-                                 'high': high_max,
-                                 'low': low_min,
-                                 'close': close_last
-                                 }
-                    is_exist = self.get_day_kline_exist(Utils.format_date(the_date))
-                    upsert_sql = UtilService.get_day_kline_upsertsql(self.security_code, dict_data, is_exist)
-                    self.dbService.insert(upsert_sql)
+                    # 统计数据，包括min， max 等
+                    day_kline_describe = day_kline.describe()
+                    open = Utils.base_round_zero(day_kline.at[first_idx, 'open'], 2)
+                    high = Utils.base_round_zero(day_kline_describe.at['max', 'high'], 2)
+                    low = Utils.base_round_zero(day_kline_describe.at['min', 'low'], 2)
+                    close = Utils.base_round_zero(day_kline.at[last_idx, 'close'], 2)
+                    # sum统计
+                    day_kline_sum = day_kline.sum()
+                    amount_count = Utils.base_round_zero(day_kline_sum['amount'] * 100, 2)
+                    vol_count = Utils.base_round_zero(day_kline_sum['vol'] * 100, 2)
+                    dict_data = {
+                        'security_code': Utils.quotes_surround(self.security_code),
+                        'the_date': Utils.quotes_surround(the_date),
+                        'amount': amount_count,
+                        'vol': vol_count,
+                        'open': open,
+                        'high': high,
+                        'low': low,
+                        'close': close
+                    }
+                    self.dbService.upsert(dict_data, 'tquant_stock_history_quotation', ['security_code', 'the_date'])
+                    print('secuirty_code', self.security_code, '实时行情基础数据入库成功')
+                    self.calculate_last_10_day(the_date)
         except Exception:
-            log_list = [Utils.get_now(), Utils.get_info(), self.get_classs_name(), self.security_code,
-                        self.get_method_name(), traceback.format_exc()]
-            Utils.print_log(log_list)
+            traceback.print_exc()
 
-    # @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@
+    def calculate_last_10_day(self, the_date):
+        sql = StockOneTable.get_select_sql() \
+              + " where security_code = {security_code} and the_date <= {the_date} " \
+                "order by the_date desc limit 10"
+        sql = sql.format(security_code=Utils.quotes_surround(self.security_code), the_date=Utils.quotes_surround(the_date))
+        tuple_datas = self.dbService.query(sql)
+        if tuple_datas is not None and len(tuple_datas) == 10:
+            list_index = []
+            list_open = []
+            list_high = []
+            list_low = []
+            list_close = []
+            list_amount = []
+            list_vol = []
+            i = len(tuple_datas) - 1
+            while i >= 0:
+                dict_data = StockOneTable.get_dict_from_tuple(tuple_datas[i])
+                list_index.append(dict_data['the_date'])
+                list_open.append(dict_data['open'])
+                list_high.append(dict_data['high'])
+                list_low.append(dict_data['low'])
+                list_close.append(dict_data['close'])
+                list_amount.append(dict_data['amount'])
+                list_vol.append(dict_data['vol'])
+                i -= 1
+            if len(list_index) == 10:
+                section = pandas.DataFrame(index=list_index, data={'open': list_open, 'high': list_high,
+                                                                   'low': list_low, 'close': list_close,
+                                                                   'amount': list_amount, 'vol': list_vol})
+                dict_data_pre = self.get_dict_data_pre(the_date)
+                if dict_data_pre is not None:
+                    self.processing_section(section, dict_data_pre)
+                    print('security_code', self.security_code, 'the_date', the_date, '计算实时行情计算完毕')
+                else:
+                    print('security_code', self.security_code, 'the_date', the_date, '计算实时行情查询dict_data_pre为None，不做计算')
+        else:
+            print('security_code', self.security_code, 'the_date', the_date, '计算实时行情不够最近10条，不做计算')
